@@ -12,17 +12,24 @@ LEGO SBD
 
 ### Tema
 |id_tema|nombre|descripcion|tipo|id_serie|licencia_esterna|
-|Fk||||||
+|---|---|---|---|---|---|
+|Pk||||||
 |nn|nn|nn|nn|||
 ||||check('TEMA','SERIE')|||
 |||||Fk||
 |number(4)|varchar2|varchar2|varchar2(5)|number(4)|boolean|
 
-##Dependientes
+### Inside_Tour
+  |f_inicio|precio_persona|total_cupos|
+  |---|---|---|
+  |Pk|||
+  |date|number|number|
+
+## Dependientes
 
 ### Juguete
 |id_juguete|nombre|rango_edad|numero_piezas|set|rango_precio|descripcion|id_tema|archivo_instrucciones|id_set|
-|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|
 |Pk||||||||||
 |nn|nn|nn|nn|nn|nn|nn|nn|||
 ||||||||Fk1||Fk2|
@@ -113,3 +120,61 @@ LEGO SBD
 |Fk1|Fk1||||
 |number(4)|serial|number(4)|---|
 - que va en tipo cliente
+
+### Cliente_Lego
+|id_cliente|nacimiento|redicencia|p_nombre|p_apellido|s_apellido|fecha_nac|num_doc|telefono|s_nombre|num_pass|f_ven_pass|email|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|nn|nn|nn|nn|nn|nn|nn|nn|nn|---|---|---|---|
+|Fk1|Fk1|Fk1|---|---|---|---|---|---|---|---|---|---|
+||||||||unique|||unique|||
+||Fk1|Fk2|||||||||||
+|number(4)|number(4)|number(4)|varchar2|varchar2|varchar2|date|varchar2|number|varchar2|varchar2|date|varchar2|
+- revisar los fk, esta raro
+- formatear el email
+- no puede ver nadie menor a 21 anno
+
+### Fan_Menor_Lego
+|id_fan|nacimiento|p_nombre|p_apellido|s_apellido|f_nac|num_doc|num_pass|f_ven_pass|id_representante|
+|---|---|---|---|---|---|---|---|---|---|
+|Fk1|Fk1|||||||||
+|nn|nn|nn|nn|nn|nn|nn||||
+|||||||unique|unique|||
+|number(4)|number(4)|varchar2|varchar2|varchar2|date|varchar2|varchar2|date|number(4)|
+- si el fan es menor a 18 annos se requiere el id del participante
+
+### Inscritos
+|num_inscripcion|id_inscritos|participante_menor|participante_mayor|
+|---|---|---|---|
+|Pk1|Pk1|||
+|nn|nn|||
+|Fk1||Fk2|Fk3|
+|number(4)|number(4)|number(4)|number(4)|
+- el participante_menor o participante_menor deben estar insertados pero ambos no deben estar al mismo tiempo
+
+### Entrada
+|num_inscripcion|num_entrada|tipo|
+|---|---|---|
+|Pk1|Pk1||
+|nn|nn|nn|
+|||check('MENOR','REGULAR)|
+|Fk|||
+|number(4)|number(4)|varchar2(7)|
+
+### Inscripcion_Tour
+|f_inicio|num_inscripcion|total|status_conf|
+|---|---|---|---|
+|Pk1|Pk1|||
+|nn|nn|nn|nn|
+|Fk|||check(status)|
+|date|number(4)|number|varchar2|
+- confirmar cuales son los status de inscripcion
+- total es calculado
+
+### Factura_online
+|num_factura|f_emision|total|id_cliente|puntos_acum_venta|gratis_lealtad|
+|---|---|---|---|---|---|
+|Pk||||||
+||||Fk|||
+|serial|date|number|number(4)|boolean|number|
+- toatl es calculado
+- puntos-acum-venta es calculado
