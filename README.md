@@ -18,6 +18,7 @@ LEGO SBD
 ||||check('TEMA','SERIE')|||
 |||||Fk||
 |number(4)|varchar2|varchar2|varchar2(5)|number(4)|boolean|
+- TEMA ES CLASIFICACION MAS ALTA
 
 ### Inside_Tour
   |f_inicio|precio_persona|total_cupos|
@@ -33,15 +34,17 @@ LEGO SBD
 ## Dependientes
 
 ### Juguete
-|id_juguete|nombre|rango_edad|numero_piezas|set|rango_precio|descripcion|id_tema|archivo_instrucciones|id_set|
+|id_juguete|nombre|rango_edad|set|rango_precio|descripcion|id_tema|archivo_instrucciones|numero_piezas|id_set|
 |---|---|---|---|---|---|---|---|---|---|
 |Pk||||||||||
-|nn|nn|nn|nn|nn|nn|nn|nn|||
+|nn|nn|nn|nn|nn|nn|nn||||
 ||||||||Fk1||Fk2|
 |||check('0 a 2', '3 a 4', '5 a 6', '7 a 8', '9 a 11', '12+', 'ADULTOS')|||check('A','B','C','D')|||||
-|number(4)|varchar2|varchar2|number|boolean|char|varchar2|number(4)|varchar2|number(4)|
+|number(4)|varchar2|varchar2|boolean|char|varchar2|number(4)|varchar2|number(8)|number(4)|
 - chequear los rangos de edades y ponerlos
 - trigger al insertar precio
+- NUMERO DE PIEZAS OBLIGATORIO EN !SET
+- SET ES AGRUPACION DE JUGUETES INDIVIDUALES
 
 
 ### Estado
@@ -125,6 +128,8 @@ LEGO SBD
 |nn|nn|
 |Fk1|Fk2|
 |number(4)|number(4)|
+- LA GENTE QUE COMPRA X TAMBIEN HA COMPRADO...
+- CATALOGO ARTIFICIAL
 
 ### Factura_Fisica
 |id_tienda|num_factura|id_cliente|fecha_emision|total|
@@ -141,8 +146,9 @@ LEGO SBD
 |---|---|---|---|
 |Pk1|Pk1|Pk1||
 |nn|nn|nn|nn|nn|
-|Fk1|Fk1|||check('0 a 2', '3 a 4', '5 a 6', '7 a 8', '9 a 11', '12+', 'ADULTOS')|
+|Fk1|Fk1|||check('NINNO', 'ADOLESCENTE', 'ADULTO')|
 |number(4)|serial|number(4)|varchar2|
+- TIPO DE CLIENTE AGRUPA RANGOS EDAD EN CATEGORIAS AMPLIAS AUTOMATICAMENTE
 
 ### Cliente_Lego
 |id_cliente|p_nombre|p_apellido|s_apellido|fecha_nac|num_doc|telefono|nacimiento|redicencia|s_nombre|num_pass|f_ven_pass|email|
@@ -209,6 +215,7 @@ LEGO SBD
 - puntos-acum-venta es calculado
 - gratis lealtad true si acumulado en venta online anterior puntos_acum_venta => 500
 - total en una venta gratis solo toma en cuenta el recargo de envio
+- LIMITE DE COMPRA ES UNIVERSAL, NO POR FACTURA
 
 ### Det_Factura_Onl
 |num_factura|id_det_fact|cantidad|id_catalog|id_pais|
