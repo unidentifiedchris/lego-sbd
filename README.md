@@ -41,7 +41,7 @@ LEGO SBD
 |||check('0 a 2', '3 a 4', '5 a 6', '7 a 8', '9 a 11', '12+', 'ADULTOS')|||check('A','B','C','D')|||||
 |number(4)|varchar2|varchar2|number|boolean|char|varchar2|number(4)|varchar2|number(4)|
 - chequear los rangos de edades y ponerlos
-
+- al cambiar el precio del juguete el rango de precio debe ser actualizado segun donde este el nuevo valor 
 
 ### Estado
 |id_pais|id_estado|nombre|
