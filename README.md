@@ -41,7 +41,8 @@ LEGO SBD
 |||check('0 a 2', '3 a 4', '5 a 6', '7 a 8', '9 a 11', '12+', 'ADULTOS')|||check('A','B','C','D')|||||
 |number(4)|varchar2|varchar2|number|boolean|char|varchar2|number(4)|varchar2|number(4)|
 - chequear los rangos de edades y ponerlos
-- al cambiar el precio del juguete el rango de precio debe ser actualizado segun donde este el nuevo valor 
+- trigger al insertar precio
+
 
 ### Estado
 |id_pais|id_estado|nombre|
@@ -67,6 +68,7 @@ LEGO SBD
 ||Fk1|Fk1|Fk1||||
 |number(4)|number(4)|number(4)|number(4)|varchar2|varchar2|varchar2|
 - telefono_contacto es un string de la forma '+000 000 00000000' (internacional - local - numero), se comprueba a traves de una regex ^(\+?\d{1,3})?[\s.-]?(\(?\d{1,4}\)?)?[\s.-]?(\d[\s.-]?){4,14}\d$
+- nombre es trigger al crear, 'Lego Store' + nombre.ciudad
 
 ### Horario
 |id_tienda|dia|hora_inicio|hora_fin|
@@ -128,10 +130,11 @@ LEGO SBD
 |id_tienda|num_factura|id_cliente|fecha_emision|total|
 |---|---|---|---|---|
 |Pk1|Pk1||||
-|nn|nn|nn|nn|nn|
+|nn|nn|nn|nn||
 |Fk1||Fk2|||
 |number(4)|serial|number(4)|time-stamp with local time zone|number|
--buscar mejor tipo de dato para la fecha emision 
+- buscar mejor tipo de dato para la fecha emision 
+- total es obligatorio pero se calcula mientras se insertan los productos
 
 ### Det_Factura_Fis
 |id_tienda|num_factura|id_det_fact|tipo_cliente|
@@ -146,7 +149,7 @@ LEGO SBD
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 |nn|nn|nn|nn|nn|nn|nn|nn|nn|---|---|---|---|
 |Pk|---|---|---|---|---|---|---|---|---|---|---|---|
-||||||unique|||||unique|||
+||||||unique1|||||unique2|||
 ||||||||Fk1|Fk2|||||
 |number(4)|varchar2|varchar2|varchar2|date|varchar2|number|number(4)|number(4)|varchar2|varchar2|date|varchar2|
 - formato email '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}$'
@@ -154,12 +157,13 @@ LEGO SBD
 - num_doc unique por pais
 
 ### Fan_Menor_Lego
-|id_fan|nacimiento|p_nombre|p_apellido|s_apellido|f_nac|num_doc|num_pass|f_ven_pass|id_representante|
+|id_fan|nacimiento|p_nombre|p_apellido|s_apellido|f_nac|num_doc|id_representante|num_pass|f_ven_pass|
 |---|---|---|---|---|---|---|---|---|---|
-|Fk1|Fk1|||||||||
+|Pk1|Pk1|||||||||
 |nn|nn|nn|nn|nn|nn|nn||||
+||||||||Fk|||
 |||||||unique|unique|||
-|number(4)|number(4)|varchar2|varchar2|varchar2|date|varchar2|varchar2|date|number(4)|
+|number(4)|number(4)|varchar2|varchar2|varchar2|date|varchar2|number(4)|varchar2|date|
 - si el fan es menor a 18 annos se requiere el id del id_representante -- edad(f_nac)<19 -> id_representante obligatorio
 - un fan debe ser menor a 21 annos -- edad(f_nac)<21
 - num_doc unique por pais
@@ -194,11 +198,12 @@ LEGO SBD
 - total es calculado
 
 ### Factura_online
-|num_factura|f_emision|total|id_cliente|puntos_acum_venta|gratis_lealtad|
+|num_factura|f_emision|id_cliente|puntos_acum_venta|gratis_lealtad|total|
 |---|---|---|---|---|---|
 |Pk||||||
+|nn|nn|nn|nn|nn||
 ||||Fk|||
-|serial|time-stamp with local time zone|number|number(4)|number(3)|boolean|
+|serial|time-stamp with local time zone|number(4)|number(3)|boolean|number(7,2)|
 - total es calculado
 - total: precio productos + recargo (5% UE, 15% el resto)
 - puntos-acum-venta es calculado
