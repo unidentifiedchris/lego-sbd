@@ -8,15 +8,15 @@ CREATE TABLE PAISES (
     ID_PAIS NUMBER(4) PRIMARY KEY,
     NOMBRE VARCHAR2(28) NOT NULL,
     NACIONALIDAD VARCHAR2(36) NOT NULL,
-    CONTINENTE VARCHAR2(7) NOT NULL,
-    UNION_EUROPEA NUMBER(1) NOT NULL -- 1 = true, 0 = false (Oracle SQL has no BOOLEAN type)
+    CONTINENTE VARCHAR2(7) NOT NULL CONSTRAINT CHK_PAIS_CONTINENTE CHECK (CONTINENTE IN ('AMERICA','AFRICA','ASIA','EUROPA','OCEANIA')),
+    UNION_EUROPEA NUMBER(1) NOT NULL CONSTRAINT CHK_PAIS_UNION_EUROPEA CHECK (UNION_EUROPEA IN (0,1))
 );
 
 -- 2) INSIDE_TOURS
 CREATE TABLE INSIDE_TOURS (
     F_INICIO DATE PRIMARY KEY,
-    PRECIO_PERSONA NUMBER(7,2) NOT NULL,
-    TOTAL_CUPOS NUMBER(4) NOT NULL
+    PRECIO_PERSONA NUMBER(7,2) NOT NULL CONSTRAINT CHK_INSIDE_TOUR_PRECIO CHECK (PRECIO_PERSONA > 0),
+    TOTAL_CUPOS NUMBER(4) NOT NULL CONSTRAINT CHK_INSIDE_TOUR_CUPOS CHECK (TOTAL_CUPOS > 0)
 );
 
 -- 3) CLIENTES_LEGO
@@ -26,14 +26,14 @@ CREATE TABLE CLIENTES_LEGO (
     P_APELLIDO VARCHAR2(28) NOT NULL,
     S_APELLIDO VARCHAR2(28) NOT NULL,
     FECHA_NAC DATE NOT NULL,
-    NUM_DOC VARCHAR2(50) NOT NULL,
-    TELEFONO VARCHAR2(20) NOT NULL,
-    NACIMIENTO NUMBER(4) NOT NULL, -- FK to PAISES(ID_PAIS)
-    RESIDENCIA NUMBER(4) NOT NULL, -- FK to PAISES(ID_PAIS)
+    NUM_DOC VARCHAR2(50) NOT NULL CONSTRAINT UNQ_CLIENTE_DOC_NAC UNIQUE,
+    TELEFONO VARCHAR2(20) NOT NULL CONSTRAINT CHK_CLIENTE_TELEFONO CHECK (TELEFONO IS NULL OR REGEXP_LIKE(TELEFONO, '^\+?\d{1,3}( ?\d+)+$')),
+    NACIMIENTO NUMBER(4) NOT NULL CONSTRAINT FK_CLIENTE_NACIMIENTO_PAIS REFERENCES PAISES (ID_PAIS),
+    RESIDENCIA NUMBER(4) NOT NULL CONSTRAINT FK_CLIENTE_RESIDENCIA_PAIS REFERENCES PAISES (ID_PAIS),
     S_NOMBRE VARCHAR2(28),
-    NUM_PASS VARCHAR2(50),
+    NUM_PASS VARCHAR2(50) CONSTRAINT UNQ_CLIENTE_NUM_PASS UNIQUE,
     F_VEN_PASS DATE,
-    EMAIL VARCHAR2(254)
+    EMAIL VARCHAR2(254) CONSTRAINT CHK_CLIENTE_EMAIL CHECK (EMAIL IS NULL OR REGEXP_LIKE(EMAIL, '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$'))
 );
 
 -- 4) FANS_MENOR_LEGO
@@ -42,39 +42,48 @@ CREATE TABLE FANS_MENOR_LEGO (
     P_NOMBRE VARCHAR2(28) NOT NULL,
     P_APELLIDO VARCHAR2(28) NOT NULL,
     S_APELLIDO VARCHAR2(28) NOT NULL,
-    NACIMIENTO NUMBER(4) NOT NULL, -- fk to PAISES
+    NACIMIENTO NUMBER(4) NOT NULL CONSTRAINT FK_FAN_NACIMIENTO_PAIS REFERENCES PAISES (ID_PAIS),
     FECHA_NAC DATE NOT NULL,
-    NUM_DOC VARCHAR2(50) NOT NULL,
+    NUM_DOC VARCHAR2(50) NOT NULL CONSTRAINT UNQ_FAN_DOC_NAC UNIQUE,
     S_NOMBRE VARCHAR2(28),
-    ID_REPRESENTANTE NUMBER(4), -- FK to CLIENTES_LEGO
-    NUM_PASS VARCHAR2(50),
+    ID_REPRESENTANTE NUMBER(4) CONSTRAINT FK_FAN_REPRESENTANTE REFERENCES CLIENTES_LEGO (ID_CLIENTE),
+    NUM_PASS VARCHAR2(50) CONSTRAINT UNQ_FAN_NUM_PASS UNIQUE,
     F_VEN_PASS DATE
 );
 
 -- 5) INSCRIPCIONES_TOUR
 CREATE TABLE INSCRIPCIONES_TOUR (
-    F_INICIO DATE NOT NULL, -- FK to INSIDE_TOURS
+    F_INICIO DATE NOT NULL CONSTRAINT FK_INSCRIPCION_F_INICIO REFERENCES INSIDE_TOURS (F_INICIO),
     NUM_INSCRIPCION NUMBER(4),
-    TOTAL NUMBER(9,2) NOT NULL,
+    TOTAL NUMBER(9,2) NOT NULL CONSTRAINT CHK_INSCRIPCION_TOTAL CHECK (TOTAL >= 0),
     F_INSCRIPCION DATE NOT NULL,
-    STATUS_CONF VARCHAR2(10) NOT NULL
+    STATUS_CONF VARCHAR2(10) NOT NULL CONSTRAINT CHK_INSCRIPCION_STATUS CHECK (STATUS_CONF IN ('PENDIENTE', 'PAGO')),
+    CONSTRAINT PK_INSCRIPCION PRIMARY KEY (NUM_INSCRIPCION, F_INICIO)
 );
 
 -- 6) INSCRITOS
 CREATE TABLE INSCRITOS (
-    F_INICIO DATE NOT NULL, -- fk to INSCRIPCIONES_TOUR(F_INICIO)
-    NUM_INSCRIPCION NUMBER(4) NOT NULL, -- fk to INSCRIPCIONES_TOUR(NUM_INSCRIPCION)
+    F_INICIO DATE NOT NULL,
+    NUM_INSCRIPCION NUMBER(4) NOT NULL,
     ID_INSCRITOS NUMBER(4),
-    PARTICIPANTE_MENOR NUMBER(4), -- fk to FANS_MENOR_LEGO(ID_FAN)
-    PARTICIPANTE_MAYOR NUMBER(4)  -- fk to CLIENTES_LEGO(ID_CLIENTE)
+    PARTICIPANTE_MENOR NUMBER(4) CONSTRAINT FK_INSCRITOS_PART_MENOR REFERENCES FANS_MENOR_LEGO (ID_FAN),
+    PARTICIPANTE_MAYOR NUMBER(4) CONSTRAINT FK_INSCRITOS_PART_MAYOR REFERENCES CLIENTES_LEGO (ID_CLIENTE),
+    CONSTRAINT FK_INSCRITOS_INSCRIPCION_FULL FOREIGN KEY (NUM_INSCRIPCION, F_INICIO) REFERENCES INSCRIPCIONES_TOUR (NUM_INSCRIPCION, F_INICIO),
+    CONSTRAINT PK_INSCRITOS PRIMARY KEY (F_INICIO, NUM_INSCRIPCION, ID_INSCRITOS),
+    CONSTRAINT CHK_INSCRITOS_PARTICIPANT_XOR CHECK (
+        (PARTICIPANTE_MENOR IS NOT NULL AND PARTICIPANTE_MAYOR IS NULL) OR
+        (PARTICIPANTE_MENOR IS NULL AND PARTICIPANTE_MAYOR IS NOT NULL)
+    )
 );
 
 -- 7) ENTRADAS
 CREATE TABLE ENTRADAS (
-    F_INICIO DATE NOT NULL, -- fk to INSCRIPCIONES_TOUR(F_INICIO)
-    NUM_INSCRIPCION NUMBER(4) NOT NULL, -- fk to INSCRIPCIONES_TOUR(NUM_INSCRIPCION)
+    F_INICIO DATE NOT NULL,
+    NUM_INSCRIPCION NUMBER(4) NOT NULL,
     NUM_ENTRADA NUMBER(4),
-    TIPO VARCHAR2(7) NOT NULL
+    TIPO VARCHAR2(7) NOT NULL CONSTRAINT CHK_ENTRADA_TIPO CHECK (TIPO IN ('MENOR','REGULAR')),
+    CONSTRAINT FK_ENTRADA_INSCRIPCION_FULL FOREIGN KEY (NUM_INSCRIPCION, F_INICIO) REFERENCES INSCRIPCIONES_TOUR (NUM_INSCRIPCION, F_INICIO),
+    CONSTRAINT PK_ENTRADA PRIMARY KEY (F_INICIO, NUM_INSCRIPCION, NUM_ENTRADA)
 );
 
 -- 8)
@@ -106,8 +115,8 @@ CREATE TABLE TIENDAS (
     NOMBRE VARCHAR2(100) NOT NULL,
     DIRECCION VARCHAR2(200) NOT NULL,
     TELEFONO VARCHAR2(17) NOT NULL,
-    CONSTRAINT FK1_TIENDAS FOREIGN KEY (ID_PAIS, ID_ESTADO, ID_CUIDAD) REFERENCES CIUDADES (ID_PAIS, ID_ESTADO, ID_CUIDAD)
-    CONSTRAINT CHK_TIENDA_TELEFONO CHECK (TELEFONO IS NULL OR REGEXP_LIKE(TELEFONO, '^(\+?\d{1,3})?[\s.-]?(\(?\d{1,4}\)?)?[\s.-]?(\d[\s.-]?){4,14}\d$'));
+    CONSTRAINT FK1_TIENDAS FOREIGN KEY (ID_PAIS, ID_ESTADO, ID_CUIDAD) REFERENCES CIUDADES (ID_PAIS, ID_ESTADO, ID_CUIDAD),
+    CONSTRAINT CHK_TIENDA_TELEFONO CHECK (TELEFONO IS NULL OR REGEXP_LIKE(TELEFONO, '^\+?\d{1,3}( ?\d+)+$'))
 );
 
 -- 11)
@@ -123,61 +132,6 @@ CREATE TABLE HORARIOS (
     CONSTRAINT CHK_HORA_FIN_FORMATO CHECK (REGEXP_LIKE(TO_CHAR(HORA_FIN, 'HH24:MI:SS'), '^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$')),
     CONSTRAINT CHK_HORARIO_VALIDO CHECK (HORA_FIN > HORA_INICIO)
 );
-
--- ======================================
--- Add constraints (PKs, FKs, Checks, Uniques) via ALTER TABLE
--- ======================================
-
-ALTER TABLE PAISES ADD CONSTRAINT CHK_PAIS_CONTINENTE CHECK (CONTINENTE IN ('AMERICA','AFRICA','ASIA','EUROPA','OCEANIA'));
-ALTER TABLE PAISES ADD CONSTRAINT CHK_PAIS_UNION_EUROPEA CHECK (UNION_EUROPEA IN (0,1)); -- 1 = true, 0 = false
-
-ALTER TABLE INSIDE_TOURS ADD CONSTRAINT CHK_INSIDE_TOUR_CUPOS CHECK (TOTAL_CUPOS > 0);
-ALTER TABLE INSIDE_TOURS ADD CONSTRAINT CHK_INSIDE_TOUR_PRECIO CHECK (PRECIO_PERSONA > 0);
-
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT UNQ_CLIENTE_DOC_NAC UNIQUE (NUM_DOC); -- (NUM_DOC, NACIMIENTO)
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT UNQ_CLIENTE_NUM_PASS UNIQUE (NUM_PASS);
--- Age must be >= 21 years: fecha_nac <= add_months(sysdate, -12*21)
--- Age validation for CLIENTES_LEGO is implemented via a trigger because CHECK constraints
--- in Oracle cannot reference SYSDATE. See triggers below.
--- Email basic regex check, using REGEXP_LIKE; 
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT CHK_CLIENTE_EMAIL CHECK (EMAIL IS NULL OR REGEXP_LIKE(EMAIL, '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$'));
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT CHK_CLIENTE_TELEFONO CHECK (TELEFONO IS NULL OR REGEXP_LIKE(TELEFONO, '^(\+?\d{1,3})?[\s.-]?(\(?\d{1,4}\)?)?[\s.-]?(\d[\s.-]?){4,14}\d$'));
-
--- FKs client nacimiento and residencia to PAISES
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT FK_CLIENTE_NACIMIENTO_PAIS FOREIGN KEY (NACIMIENTO) REFERENCES PAISES (ID_PAIS);
-ALTER TABLE CLIENTES_LEGO ADD CONSTRAINT FK_CLIENTE_RESIDENCIA_PAIS FOREIGN KEY (RESIDENCIA) REFERENCES PAISES (ID_PAIS);
-
-ALTER TABLE FANS_MENOR_LEGO ADD CONSTRAINT UNQ_FAN_DOC_NAC UNIQUE (NUM_DOC); -- (NUM_DOC, NACIMIENTO)
-ALTER TABLE FANS_MENOR_LEGO ADD CONSTRAINT UNQ_FAN_NUM_PASS UNIQUE (NUM_PASS);
-ALTER TABLE FANS_MENOR_LEGO ADD CONSTRAINT FK_FAN_NACIMIENTO_PAIS FOREIGN KEY (NACIMIENTO) REFERENCES PAISES (ID_PAIS);
-ALTER TABLE FANS_MENOR_LEGO ADD CONSTRAINT FK_FAN_REPRESENTANTE FOREIGN KEY (ID_REPRESENTANTE) REFERENCES CLIENTES_LEGO (ID_CLIENTE);
--- A fan must be less than 21 years old: fecha_nac > add_months(sysdate, -12*21)
--- Age validations for FANS_MENOR_LEGO (and representative requirement) are implemented via
--- a trigger because CHECK constraints in Oracle cannot reference SYSDATE. See triggers below.
-
-ALTER TABLE INSCRIPCIONES_TOUR ADD CONSTRAINT FK_INSCRIPCION_F_INICIO FOREIGN KEY (F_INICIO) REFERENCES INSIDE_TOURS (F_INICIO);
-ALTER TABLE INSCRIPCIONES_TOUR ADD CONSTRAINT PK_INSCRIPCION PRIMARY KEY (NUM_INSCRIPCION, F_INICIO);
-ALTER TABLE INSCRIPCIONES_TOUR ADD CONSTRAINT CHK_INSCRIPCION_STATUS CHECK (STATUS_CONF IN ('PENDIENTE', 'PAGO'));
-ALTER TABLE INSCRIPCIONES_TOUR ADD CONSTRAINT CHK_INSCRIPCION_TOTAL CHECK (TOTAL >= 0);
-
--- Since INSCRIPCIONES_TOUR has a composite primary key (NUM_INSCRIPCION, F_INICIO), the
--- foreign key in INSCRITOS must reference both columns together.
-ALTER TABLE INSCRITOS ADD CONSTRAINT FK_INSCRITOS_INSCRIPCION_FULL FOREIGN KEY (NUM_INSCRIPCION, F_INICIO) REFERENCES INSCRIPCIONES_TOUR (NUM_INSCRIPCION, F_INICIO);
-ALTER TABLE INSCRITOS ADD CONSTRAINT PK_INSCRITOS PRIMARY KEY (F_INICIO, NUM_INSCRIPCION, ID_INSCRITOS);
-ALTER TABLE INSCRITOS ADD CONSTRAINT FK_INSCRITOS_PART_MAYOR FOREIGN KEY (PARTICIPANTE_MAYOR) REFERENCES CLIENTES_LEGO (ID_CLIENTE);
-ALTER TABLE INSCRITOS ADD CONSTRAINT FK_INSCRITOS_PART_MENOR FOREIGN KEY (PARTICIPANTE_MENOR) REFERENCES FANS_MENOR_LEGO (ID_FAN);
--- Participant must be either a menor OR a mayor (exclusive)
-ALTER TABLE INSCRITOS ADD CONSTRAINT CHK_INSCRITOS_PARTICIPANT_XOR CHECK (
-    (PARTICIPANTE_MENOR IS NOT NULL AND PARTICIPANTE_MAYOR IS NULL) OR
-    (PARTICIPANTE_MENOR IS NULL AND PARTICIPANTE_MAYOR IS NOT NULL)
-);
-
--- Use a composite foreign key on ENTRADAS that references the composite primary key on INSCRIPCIONES_TOUR
-ALTER TABLE ENTRADAS ADD CONSTRAINT FK_ENTRADA_INSCRIPCION_FULL FOREIGN KEY (NUM_INSCRIPCION, F_INICIO) REFERENCES INSCRIPCIONES_TOUR (NUM_INSCRIPCION, F_INICIO);
-
-ALTER TABLE ENTRADAS ADD CONSTRAINT CHK_ENTRADA_TIPO CHECK (TIPO IN ('MENOR','REGULAR'));
-
-COMMIT;
 
 -- CREATE OR REPLACE TRIGGERS 
 
@@ -230,7 +184,7 @@ END;
 -- The constraint considers that each Inside Tour lasts 3 days starting at F_INICIO
 -- So no two tours can have start dates within a 3-day overlapping window.
 CREATE OR REPLACE TRIGGER TRG_INSIDE_TOURS_NO_OVERLAP
-BEFORE INSERT OR UPDATE ON INSIDE_TOURS
+BEFORE INSERT ON INSIDE_TOURS
 FOR EACH ROW
 DECLARE
     v_conflicts NUMBER;
@@ -239,14 +193,9 @@ BEGIN
     SELECT COUNT(*) INTO v_conflicts
     FROM INSIDE_TOURS t
     WHERE (
-        -- overlapping: t start within new tour window
-        (t.F_INICIO BETWEEN :NEW.F_INICIO AND :NEW.F_INICIO + 2)
-        OR
-        -- or new start within existing tour window
-        (:NEW.F_INICIO BETWEEN t.F_INICIO AND t.F_INICIO + 2)
-    )
-    -- exclude current row when updating (the row with the same F_INICIO as the old value)
-    AND (:OLD.F_INICIO IS NULL OR t.F_INICIO != :OLD.F_INICIO);
+        -- overlapping
+        (t.F_INICIO BETWEEN :NEW.F_INICIO -2 AND :NEW.F_INICIO + 2)
+    );
 
     IF v_conflicts > 0 THEN
         RAISE_APPLICATION_ERROR(-20020, 'INSIDE_TOURS overlap: F_INICIO en conflicto con otro tour planificado');
@@ -296,119 +245,493 @@ END;
 
 COMMIT;
 
+CREATE OR REPLACE TRIGGER TRG_INSCRIPCION_FECHA_INICIO
+BEFORE INSERT ON INSCRIPCIONES_TOUR
+FOR EACH ROW
+BEGIN
+    -- Check if the tour start date (F_INICIO) is in the past. TRUNC(SYSDATE) is used to compare dates only.
+    IF :NEW.F_INICIO < TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20030, 'No se puede crear una inscripción para un tour cuya fecha de inicio ya ha pasado.');
+    END IF;
+END;
+/
+
+COMMIT;
+
+CREATE OR REPLACE TRIGGER TRG_INSCRITO_FECHA_INICIO
+BEFORE INSERT ON INSCRITOS
+FOR EACH ROW
+BEGIN
+    -- Check if the tour start date (F_INICIO) is in the past. TRUNC(SYSDATE) is used to compare dates only.
+    IF :NEW.F_INICIO < TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20030, 'No se puede registrar un participante para un tour cuya fecha de inicio ya ha pasado.');
+    END IF;
+END;
+/
+
+COMMIT;
+
+CREATE OR REPLACE TRIGGER TRG_ENTRADA_FECHA_INICIO
+BEFORE INSERT ON ENTRADAS
+FOR EACH ROW
+BEGIN
+    -- Check if the tour start date (F_INICIO) is in the past. TRUNC(SYSDATE) is used to compare dates only.
+    IF :NEW.F_INICIO < TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20030, 'No se puede crear una entrada para un tour cuya fecha de inicio ya ha pasado.');
+    END IF;
+END;
+/
+
+COMMIT;
+
+-- SEQUENCES
+CREATE SEQUENCE S_PAISES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_CLIENTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_FANS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_INSCRIPCIONES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_INSCRITOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_ENTRADAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+
+-- PROCEDURES, FUNCTONS AND PACKAGES
+
+CREATE OR REPLACE FUNCTION FN_CALCULATE_CONVERSION(
+    p_value IN NUMBER,
+    p_operation_type IN VARCHAR2
+) RETURN NUMBER IS
+BEGIN
+    -- Use a CASE statement to handle the different operation types
+    CASE UPPER(p_operation_type)
+        WHEN 'D' THEN -- Dolares
+            RETURN p_value * 1.16;
+        WHEN 'C' THEN -- Coronas
+            RETURN p_value * 7.47;
+        ELSE
+            -- If the operation type is not recognized, raise an error
+            -- to prevent unexpected behavior.
+            RAISE_APPLICATION_ERROR(-20050, 'Tipo de operación inválido. Use ''D'' o ''C''.');
+    END CASE;
+END FN_CALCULATE_CONVERSION;
+/
+
+CREATE OR REPLACE FUNCTION FN_COUNT_INSCRITOS_BY_DATE(
+    p_f_inicio IN DATE
+) RETURN NUMBER IS
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM INSCRITOS
+    WHERE F_INICIO = p_f_inicio;
+    RETURN v_count;
+END FN_COUNT_INSCRITOS_BY_DATE;
+/
+
+-- N° Inscripciones asociadas a un tour
+CREATE OR REPLACE FUNCTION FN_COUNT_INSCRIPCIONES_BY_DATE(
+    p_f_inicio IN DATE
+) RETURN NUMBER IS
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM INSCRIPCIONES_TOUR
+    WHERE F_INICIO = p_f_inicio;
+    RETURN v_count;
+END FN_COUNT_INSCRIPCIONES_BY_DATE;
+/
+
+-- N° Inscritos asociados a una inscripcion
+CREATE OR REPLACE FUNCTION FN_COUNT_INSCRITOS_BY_INSCRIPCION(
+    p_f_inicio IN DATE,
+    p_num_inscripcion IN NUMBER
+) RETURN NUMBER IS
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM INSCRITOS
+    WHERE F_INICIO = p_f_inicio
+      AND NUM_INSCRIPCION = p_num_inscripcion;
+    RETURN v_count;
+END FN_COUNT_INSCRITOS_BY_INSCRIPCION;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_AGE(
+    p_date IN DATE
+) RETURN NUMBER IS
+BEGIN
+    -- Calculate age by finding the total months between today and the birth date,
+    -- dividing by 12, and taking the integer part.
+    RETURN FLOOR(MONTHS_BETWEEN(SYSDATE, p_date) / 12);
+END FN_GET_AGE;
+/
+
+CREATE OR REPLACE PACKAGE pkg_lego_inserts_t AS
+
+   PROCEDURE SP_INSERT_PAIS(p_nombre IN VARCHAR2, p_nacionalidad IN VARCHAR2, p_continente IN VARCHAR2, p_union_europea IN NUMBER, p_id_out OUT NUMBER);
+   PROCEDURE SP_INSERT_INSIDE_TOUR(p_f_inicio IN DATE, p_precio_persona IN NUMBER, p_total_cupos IN NUMBER);
+   PROCEDURE SP_INSERT_CLIENTE(p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_fecha_nac IN DATE, p_num_doc IN VARCHAR2, p_telefono IN VARCHAR2, p_nacimiento IN NUMBER, p_residencia IN NUMBER, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL, p_email IN VARCHAR2 DEFAULT NULL, p_id_out OUT NUMBER);
+   PROCEDURE SP_INSERT_FAN(p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_nacimiento IN NUMBER, p_fecha_nac IN DATE, p_num_doc IN VARCHAR2, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_id_representante IN NUMBER DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL, p_id_out OUT NUMBER);
+   PROCEDURE SP_INSERT_INSCRIPCION(p_f_inicio IN DATE, p_f_inscripcion IN DATE DEFAULT SYSDATE, p_status_conf IN VARCHAR2 DEFAULT 'PENDIENTE', p_total IN NUMBER DEFAULT 0, p_num_inscripcion OUT NUMBER);
+   PROCEDURE SP_INSERT_INSCRITO(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER, p_participante_menor IN NUMBER DEFAULT NULL, p_participante_mayor IN NUMBER DEFAULT NULL, p_id_out OUT NUMBER);
+   PROCEDURE SP_INSERT_ENTRADA(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER, p_tipo IN VARCHAR2, p_num_entrada OUT NUMBER);
+
+END pkg_lego_inserts_t;
+/
+
+-- Package Body
+CREATE OR REPLACE PACKAGE BODY pkg_lego_inserts_t AS
+
+   PROCEDURE SP_INSERT_PAIS(p_nombre IN VARCHAR2, p_nacionalidad IN VARCHAR2, p_continente IN VARCHAR2, p_union_europea IN NUMBER, p_id_out OUT NUMBER) IS
+   BEGIN
+      INSERT INTO PAISES (ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA)
+      VALUES (S_PAISES.nextval, p_nombre, p_nacionalidad, p_continente, p_union_europea)
+      RETURNING ID_PAIS INTO p_id_out;
+   END SP_INSERT_PAIS;
+
+   PROCEDURE SP_INSERT_INSIDE_TOUR(p_f_inicio IN DATE, p_precio_persona IN NUMBER, p_total_cupos IN NUMBER) IS
+   BEGIN
+      INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
+      VALUES (p_f_inicio, p_precio_persona, p_total_cupos);
+   END SP_INSERT_INSIDE_TOUR;
+
+   PROCEDURE SP_INSERT_CLIENTE(p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_fecha_nac IN DATE, p_num_doc IN VARCHAR2, p_telefono IN VARCHAR2, p_nacimiento IN NUMBER, p_residencia IN NUMBER, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL, p_email IN VARCHAR2 DEFAULT NULL, p_id_out OUT NUMBER) IS
+   BEGIN
+      INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
+      VALUES (S_CLIENTES.nextval, p_p_nombre, p_p_apellido, p_s_apellido, p_fecha_nac, p_num_doc, p_telefono, p_nacimiento, p_residencia, p_s_nombre, p_num_pass, p_f_ven_pass, p_email)
+      RETURNING ID_CLIENTE INTO p_id_out;
+   END SP_INSERT_CLIENTE;
+
+   PROCEDURE SP_INSERT_FAN(p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_nacimiento IN NUMBER, p_fecha_nac IN DATE, p_num_doc IN VARCHAR2, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_id_representante IN NUMBER DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL, p_id_out OUT NUMBER) IS
+   BEGIN
+      INSERT INTO FANS_MENOR_LEGO (ID_FAN, P_NOMBRE, P_APELLIDO, S_APELLIDO, NACIMIENTO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
+      VALUES (S_FANS.nextval, p_p_nombre, p_p_apellido, p_s_apellido, p_nacimiento, p_fecha_nac, p_num_doc, p_s_nombre, p_id_representante, p_num_pass, p_f_ven_pass)
+      RETURNING ID_FAN INTO p_id_out;
+   END SP_INSERT_FAN;
+
+   PROCEDURE SP_INSERT_INSCRIPCION(p_f_inicio IN DATE, p_f_inscripcion IN DATE DEFAULT SYSDATE, p_status_conf IN VARCHAR2 DEFAULT 'PENDIENTE', p_total IN NUMBER DEFAULT 0, p_num_inscripcion OUT NUMBER) IS
+   BEGIN
+      INSERT INTO INSCRIPCIONES_TOUR (F_INICIO, NUM_INSCRIPCION, F_INSCRIPCION, STATUS_CONF, TOTAL)
+      VALUES (p_f_inicio, S_INSCRIPCIONES.nextval, p_f_inscripcion, p_status_conf, p_total)
+      RETURNING NUM_INSCRIPCION INTO p_num_inscripcion;
+   END SP_INSERT_INSCRIPCION;
+
+   PROCEDURE SP_INSERT_INSCRITO(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER, p_participante_menor IN NUMBER DEFAULT NULL, p_participante_mayor IN NUMBER DEFAULT NULL, p_id_out OUT NUMBER) IS
+   BEGIN
+      INSERT INTO INSCRITOS (F_INICIO, NUM_INSCRIPCION, ID_INSCRITOS, PARTICIPANTE_MENOR, PARTICIPANTE_MAYOR)
+      VALUES (p_f_inicio, p_num_inscripcion, S_INSCRITOS.nextval, p_participante_menor, p_participante_mayor)
+      RETURNING ID_INSCRITOS INTO p_id_out;
+   END SP_INSERT_INSCRITO;
+
+   PROCEDURE SP_INSERT_ENTRADA(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER, p_tipo IN VARCHAR2, p_num_entrada OUT NUMBER) IS
+   BEGIN
+      INSERT INTO ENTRADAS (F_INICIO, NUM_INSCRIPCION, NUM_ENTRADA, TIPO)
+      VALUES (p_f_inicio, p_num_inscripcion, S_ENTRADAS.nextval, p_tipo)
+      RETURNING NUM_ENTRADA INTO p_num_entrada;
+   END SP_INSERT_ENTRADA;
+
+END pkg_lego_inserts_t;
+/
+
+CREATE OR REPLACE PACKAGE pkg_lego_deletes_t AS
+
+   PROCEDURE SP_DELETE_PAIS(p_id_pais IN NUMBER DEFAULT NULL);
+   PROCEDURE SP_DELETE_INSIDE_TOUR(p_f_inicio IN DATE DEFAULT NULL);
+   PROCEDURE SP_DELETE_CLIENTE(p_id_cliente IN NUMBER DEFAULT NULL);
+   PROCEDURE SP_DELETE_FAN(p_id_fan IN NUMBER DEFAULT NULL);
+   PROCEDURE SP_DELETE_INSCRIPCION(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER);
+   PROCEDURE SP_DELETE_ALL_INSCRIPCIONES(p_f_inicio IN DATE DEFAULT NULL);
+   PROCEDURE SP_DELETE_INSCRITO(p_f_inicio IN DATE DEFAULT NULL, p_num_inscripcion IN NUMBER DEFAULT NULL, p_id_inscrito IN NUMBER DEFAULT NULL);
+   PROCEDURE SP_DELETE_ENTRADA(p_f_inicio IN DATE DEFAULT NULL, p_num_inscripcion IN NUMBER DEFAULT NULL, p_num_entrada IN NUMBER DEFAULT NULL);
+
+END pkg_lego_deletes_t;
+/
+
+-- Package Body
+CREATE OR REPLACE PACKAGE BODY pkg_lego_deletes_t AS
+
+   PROCEDURE SP_DELETE_PAIS(p_id_pais IN NUMBER DEFAULT NULL) IS
+   BEGIN
+      IF p_id_pais IS NOT NULL THEN
+         -- Cascade delete for CLIENTES_LEGO referencing this PAIS
+         FOR r_cli IN (SELECT id_cliente FROM CLIENTES_LEGO WHERE nacimiento = p_id_pais OR residencia = p_id_pais) LOOP
+            SP_DELETE_CLIENTE(r_cli.id_cliente);
+         END LOOP;
+
+         DELETE FROM PAISES WHERE ID_PAIS = p_id_pais;
+      ELSE
+         -- Delete all, requires emptying dependent tables first
+         SP_DELETE_ENTRADA(NULL, NULL, NULL);
+         SP_DELETE_INSCRITO(NULL, NULL, NULL);
+         SP_DELETE_ALL_INSCRIPCIONES(NULL);
+         SP_DELETE_FAN(NULL);
+         SP_DELETE_CLIENTE(NULL);
+         DELETE FROM PAISES;
+      END IF;
+   END SP_DELETE_PAIS;
+
+   PROCEDURE SP_DELETE_INSIDE_TOUR(p_f_inicio IN DATE DEFAULT NULL) IS
+   BEGIN
+      IF p_f_inicio IS NOT NULL THEN
+         SP_DELETE_ALL_INSCRIPCIONES(p_f_inicio);
+         DELETE FROM INSIDE_TOURS WHERE F_INICIO = p_f_inicio;
+      ELSE
+         SP_DELETE_ALL_INSCRIPCIONES(NULL);
+         DELETE FROM INSIDE_TOURS;
+      END IF;
+   END SP_DELETE_INSIDE_TOUR;
+
+   PROCEDURE SP_DELETE_CLIENTE(p_id_cliente IN NUMBER DEFAULT NULL) IS
+   BEGIN
+      IF p_id_cliente IS NOT NULL THEN
+         -- Cascade delete for FANS_MENOR_LEGO and INSCRITOS
+         FOR r_fan IN (SELECT id_fan FROM FANS_MENOR_LEGO WHERE id_representante = p_id_cliente) LOOP
+            SP_DELETE_FAN(r_fan.id_fan);
+         END LOOP;
+         DELETE FROM INSCRITOS WHERE participante_mayor = p_id_cliente;
+         DELETE FROM CLIENTES_LEGO WHERE ID_CLIENTE = p_id_cliente;
+      ELSE
+         SP_DELETE_FAN(NULL);
+         DELETE FROM INSCRITOS WHERE participante_mayor IS NOT NULL;
+         DELETE FROM CLIENTES_LEGO;
+      END IF;
+   END SP_DELETE_CLIENTE;
+
+   PROCEDURE SP_DELETE_FAN(p_id_fan IN NUMBER DEFAULT NULL) IS
+   BEGIN
+      IF p_id_fan IS NOT NULL THEN
+         DELETE FROM INSCRITOS WHERE participante_menor = p_id_fan;
+         DELETE FROM FANS_MENOR_LEGO WHERE ID_FAN = p_id_fan;
+      ELSE
+         DELETE FROM INSCRITOS WHERE participante_menor IS NOT NULL;
+         DELETE FROM FANS_MENOR_LEGO;
+      END IF;
+   END SP_DELETE_FAN;
+
+   PROCEDURE SP_DELETE_INSCRIPCION(p_f_inicio IN DATE, p_num_inscripcion IN NUMBER) IS
+   BEGIN
+      DELETE FROM ENTRADAS WHERE F_INICIO = p_f_inicio AND NUM_INSCRIPCION = p_num_inscripcion;
+      DELETE FROM INSCRITOS WHERE F_INICIO = p_f_inicio AND NUM_INSCRIPCION = p_num_inscripcion;
+      DELETE FROM INSCRIPCIONES_TOUR WHERE F_INICIO = p_f_inicio AND NUM_INSCRIPCION = p_num_inscripcion;
+   END SP_DELETE_INSCRIPCION;
+
+   PROCEDURE SP_DELETE_ALL_INSCRIPCIONES(p_f_inicio IN DATE DEFAULT NULL) IS
+   BEGIN
+      IF p_f_inicio IS NOT NULL THEN
+         DELETE FROM ENTRADAS WHERE F_INICIO = p_f_inicio;
+         DELETE FROM INSCRITOS WHERE F_INICIO = p_f_inicio;
+         DELETE FROM INSCRIPCIONES_TOUR WHERE F_INICIO = p_f_inicio;
+      ELSE
+         SP_DELETE_ENTRADA(NULL, NULL, NULL);
+         SP_DELETE_INSCRITO(NULL, NULL, NULL);
+         DELETE FROM INSCRIPCIONES_TOUR;
+      END IF;
+   END SP_DELETE_ALL_INSCRIPCIONES;
+
+   PROCEDURE SP_DELETE_INSCRITO(p_f_inicio IN DATE DEFAULT NULL, p_num_inscripcion IN NUMBER DEFAULT NULL, p_id_inscrito IN NUMBER DEFAULT NULL) IS
+   BEGIN
+      IF p_f_inicio IS NOT NULL AND p_num_inscripcion IS NOT NULL AND p_id_inscrito IS NOT NULL THEN
+         -- Delete a single record using the composite PK
+         DELETE FROM INSCRITOS
+         WHERE F_INICIO = p_f_inicio
+           AND NUM_INSCRIPCION = p_num_inscripcion
+           AND ID_INSCRITOS = p_id_inscrito;
+      ELSE
+         -- Delete all records if any part of the PK is null
+         DELETE FROM INSCRITOS;
+      END IF;
+   END SP_DELETE_INSCRITO;
+
+   PROCEDURE SP_DELETE_ENTRADA(p_f_inicio IN DATE DEFAULT NULL, p_num_inscripcion IN NUMBER DEFAULT NULL, p_num_entrada IN NUMBER DEFAULT NULL) IS
+   BEGIN
+      IF p_f_inicio IS NOT NULL AND p_num_inscripcion IS NOT NULL AND p_num_entrada IS NOT NULL THEN
+         -- Delete a single record using the composite PK
+         DELETE FROM ENTRADAS
+         WHERE F_INICIO = p_f_inicio
+           AND NUM_INSCRIPCION = p_num_inscripcion
+           AND NUM_ENTRADA = p_num_entrada;
+      ELSE
+         -- Delete all records if any part of the PK is null
+         DELETE FROM ENTRADAS;
+      END IF;
+   END SP_DELETE_ENTRADA;
+
+END pkg_lego_deletes_t;
+/
+
+CREATE OR REPLACE PACKAGE pkg_lego_updates_t AS
+
+   PROCEDURE SP_UPDATE_PAIS(
+      p_id_pais IN NUMBER,
+      p_nombre IN VARCHAR2,
+      p_nacionalidad IN VARCHAR2,
+      p_union_europea IN NUMBER
+   );
+
+   PROCEDURE SP_UPDATE_INSIDE_TOUR(
+      p_f_inicio IN DATE,
+      p_precio_persona IN NUMBER,
+      p_total_cupos IN NUMBER
+   );
+
+   PROCEDURE SP_UPDATE_CLIENTE(
+      p_id_cliente IN NUMBER,
+      p_p_nombre IN VARCHAR2,
+      p_p_apellido IN VARCHAR2,
+      p_s_apellido IN VARCHAR2,
+      p_telefono IN VARCHAR2,
+      p_residencia IN NUMBER,
+      p_s_nombre IN VARCHAR2 DEFAULT NULL,
+      p_num_pass IN VARCHAR2 DEFAULT NULL,
+      p_f_ven_pass IN DATE DEFAULT NULL,
+      p_email IN VARCHAR2 DEFAULT NULL
+   );
+
+   PROCEDURE SP_UPDATE_FAN(
+      p_id_fan IN NUMBER,
+      p_p_nombre IN VARCHAR2,
+      p_p_apellido IN VARCHAR2,
+      p_s_apellido IN VARCHAR2,
+      p_s_nombre IN VARCHAR2 DEFAULT NULL,
+      p_id_representante IN NUMBER DEFAULT NULL,
+      p_num_pass IN VARCHAR2 DEFAULT NULL,
+      p_f_ven_pass IN DATE DEFAULT NULL
+   );
+
+END pkg_lego_updates_t;
+/
+
+-- Package Body
+CREATE OR REPLACE PACKAGE BODY pkg_lego_updates_t AS
+
+   PROCEDURE SP_UPDATE_PAIS(p_id_pais IN NUMBER, p_nombre IN VARCHAR2, p_nacionalidad IN VARCHAR2, p_union_europea IN NUMBER) IS
+   BEGIN
+      UPDATE PAISES
+      SET NOMBRE = p_nombre, NACIONALIDAD = p_nacionalidad, UNION_EUROPEA = p_union_europea
+      WHERE ID_PAIS = p_id_pais;
+   END SP_UPDATE_PAIS;
+
+   PROCEDURE SP_UPDATE_INSIDE_TOUR(p_f_inicio IN DATE, p_precio_persona IN NUMBER, p_total_cupos IN NUMBER) IS
+   BEGIN
+      UPDATE INSIDE_TOURS
+      SET PRECIO_PERSONA = p_precio_persona, TOTAL_CUPOS = p_total_cupos
+      WHERE F_INICIO = p_f_inicio;
+   END SP_UPDATE_INSIDE_TOUR;
+
+   PROCEDURE SP_UPDATE_CLIENTE(p_id_cliente IN NUMBER, p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_telefono IN VARCHAR2, p_residencia IN NUMBER, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL, p_email IN VARCHAR2 DEFAULT NULL) IS
+   BEGIN
+      UPDATE CLIENTES_LEGO
+      SET P_NOMBRE = p_p_nombre, P_APELLIDO = p_p_apellido, S_APELLIDO = p_s_apellido, TELEFONO = p_telefono, RESIDENCIA = p_residencia, S_NOMBRE = p_s_nombre, NUM_PASS = p_num_pass, F_VEN_PASS = p_f_ven_pass, EMAIL = p_email
+      WHERE ID_CLIENTE = p_id_cliente;
+   END SP_UPDATE_CLIENTE;
+
+   PROCEDURE SP_UPDATE_FAN(p_id_fan IN NUMBER, p_p_nombre IN VARCHAR2, p_p_apellido IN VARCHAR2, p_s_apellido IN VARCHAR2, p_s_nombre IN VARCHAR2 DEFAULT NULL, p_id_representante IN NUMBER DEFAULT NULL, p_num_pass IN VARCHAR2 DEFAULT NULL, p_f_ven_pass IN DATE DEFAULT NULL) IS
+   BEGIN
+      UPDATE FANS_MENOR_LEGO
+      SET P_NOMBRE = p_p_nombre, P_APELLIDO = p_p_apellido, S_APELLIDO = p_s_apellido, S_NOMBRE = p_s_nombre, ID_REPRESENTANTE = p_id_representante, NUM_PASS = p_num_pass, F_VEN_PASS = p_f_ven_pass
+      WHERE ID_FAN = p_id_fan;
+   END SP_UPDATE_FAN;
+
+END pkg_lego_updates_t;
+/
+
 
 -- INSERTS FOR TEST DATA
--- PAISES
--- 1. Sudáfrica
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA)
-VALUES (1, 'Sudafrica', 'Sudafricana', 'AFRICA', 0);
+DECLARE ID_inserts_B number(5);
+BEGIN
+    -- PAISES
+    -- 1. Sudáfrica
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Sudafrica', 'Sudafricana', 'AFRICA', 0, ID_inserts_B);
 
--- 2. Filipinas
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA) 
-VALUES (2, 'Filipinas', 'Filipina', 'ASIA', 0);
+    -- 2. Filipinas
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Filipinas', 'Filipina', 'ASIA', 0, ID_inserts_B);
 
--- 3. Irlanda (Es miembro de la UE)
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA) 
-VALUES (3, 'Irlanda', 'Irlandesa', 'EUROPA', 1);
+    -- 3. Irlanda (Es miembro de la UE)
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Irlanda', 'Irlandesa', 'EUROPA', 1, ID_inserts_B);
 
--- 4. Chile
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA) 
-VALUES (4, 'Chile', 'Chilena', 'AMERICA', 0);
+    -- 4. Chile
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Chile', 'Chilena', 'AMERICA', 0, ID_inserts_B);
 
--- 5. Indonesia
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA) 
-VALUES (5, 'Indonesia', 'Indonesa', 'ASIA', 0);
+    -- 5. Indonesia
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Indonesia', 'Indonesa', 'ASIA', 0, ID_inserts_B);
 
--- 6. Corea del Sur
-INSERT INTO PAISES(ID_PAIS, NOMBRE, NACIONALIDAD, CONTINENTE, UNION_EUROPEA) 
-VALUES (6, 'Corea del Sur', 'Surcoreana', 'ASIA', 0);
+    -- 6. Corea del Sur
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Corea del Sur', 'Surcoreana', 'ASIA', 0, ID_inserts_B);
 
-COMMIT;
+    COMMIT;
 
--- INSIDE_TOURS
--- TOUR 1: Año 2024 (Precio base 250.00 €)
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2024-01-10', 250.00, 20);
+    -- INSIDE_TOURS
+    -- TOUR 1: Año 2024 (Precio base 250.00 €)
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-10', 250.00, 20);
 
--- TOUR 2: Año 2024.
--- Fecha válida: El anterior terminó el 12 (10, 11, 12). Este empieza el 15.
--- Precio: Debe ser IGUAL al anterior por ser del mismo año.
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2024-01-15', 250.00, 25);
+    -- TOUR 2: Año 2024.
+    -- Fecha válida: El anterior terminó el 12 (10, 11, 12). Este empieza el 15.
+    -- Precio: Debe ser IGUAL al anterior por ser del mismo año.
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-15', 250.00, 25);
 
--- TOUR 3: Año 2025 (Nuevo año, el precio sube a 300.50 €)
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2025-05-01', 300.50, 30);
+    -- TOUR 3: Año 2025 (Nuevo año, el precio sube a 300.50 €)
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-01', 300.50, 30);
 
--- TOUR 4: Año 2025.
--- Fecha válida: El anterior ocupó 1, 2 y 3 de mayo. Este empieza el 5 de mayo.
--- Precio: Debe ser 300.50 (igual que el otro del 2025).
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2025-05-05', 300.50, 30);
+    -- TOUR 4: Año 2025.
+    -- Fecha válida: El anterior ocupó 1, 2 y 3 de mayo. Este empieza el 5 de mayo.
+    -- Precio: Debe ser 300.50 (igual que el otro del 2025).
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-05', 300.50, 30);
 
--- TOUR 5: Año 2025.
--- Fecha límite: Empieza justo después del anterior (5, 6, 7 ocupados -> empieza el 8).
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2025-05-08', 300.50, 15);
+    -- TOUR 5: Año 2025.
+    -- Fecha límite: Empieza justo después del anterior (5, 6, 7 ocupados -> empieza el 8).
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-08', 300.50, 15);
+    -- TOUR 6: Año 2026 (Nuevo precio anual: 350.00 €)
+    -- Duración: 10, 11 y 12 de Marzo.
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-10', 350.00, 20);
 
--- TOUR 6: Año 2026 (Nuevo precio anual: 350.00 €)
--- Duración: 10, 11 y 12 de Marzo.
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2026-03-10', 350.00, 20);
+    -- TOUR 7: Año 2026
+    -- Fecha: 20 de Marzo (No se solapa con el anterior que terminó el 12).
+    -- Precio: Debe mantenerse en 350.00 por ser del mismo año 2026.
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-20', 350.00, 15);
 
--- TOUR 7: Año 2026
--- Fecha: 20 de Marzo (No se solapa con el anterior que terminó el 12).
--- Precio: Debe mantenerse en 350.00 por ser del mismo año 2026.
-INSERT INTO INSIDE_TOURS (F_INICIO, PRECIO_PERSONA, TOTAL_CUPOS)
-VALUES (DATE '2026-03-20', 350.00, 15);
+    COMMIT;
 
-COMMIT;
+    -- CLIENTES_LEGO
+    -- Cliente 1: Chileno viviendo en Chile
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('JUAN', 'SOTO', 'MUNOZ', DATE '1990-05-15', 'DOC-CH-001', '+98 7654321', 4, 4, 'CARLOS', 'PASS-001', DATE '2030-05-15', 'juan.soto@email.com', ID_inserts_B);
 
--- CLIENTES_LEGO
--- Cliente 1: Chileno viviendo en Chile
-INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
-VALUES (1, 'JUAN', 'SOTO', 'MUNOZ', DATE '1990-05-15', 'DOC-CH-001', 987654321, 4, 4, 'CARLOS', 'PASS-001', DATE '2030-05-15', 'juan.soto@email.com');
+    -- Cliente 2: Irlandesa viviendo en Irlanda
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('SIOBHAN', 'O-CONNOR', 'SMITH', DATE '1988-11-20', 'DOC-IR-022', '+44 5566778', 3, 3, NULL, 'PASS-002', DATE '2029-11-20', 'siobhan.oc@email.com', ID_inserts_B);
 
--- Cliente 2: Irlandesa viviendo en Irlanda
-INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
-VALUES (2, 'SIOBHAN', 'O-CONNOR', 'SMITH', DATE '1988-11-20', 'DOC-IR-022', 445566778, 3, 3, NULL, 'PASS-002', DATE '2029-11-20', 'siobhan.oc@email.com');
+    -- Cliente 3: Indonesio viviendo en Corea del Sur
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('BUDI', 'SANTOSO', 'PUTRA', DATE '1995-02-10', 'DOC-IN-033', '+11 2233445', 5, 6, 'DARMA', 'PASS-003', DATE '2028-02-10', 'budi.santoso@email.com', ID_inserts_B);
 
--- Cliente 3: Indonesio viviendo en Corea del Sur
-INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
-VALUES (3, 'BUDI', 'SANTOSO', 'PUTRA', DATE '1995-02-10', 'DOC-IN-033', 112233445, 5, 6, 'DARMA', 'PASS-003', DATE '2028-02-10', 'budi.santoso@email.com');
+    -- Cliente 4: Sudafricano viviendo en Filipinas
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('THABO', 'MOLEFE', 'ZULU', DATE '1982-07-30', 'DOC-SA-044', '+99 8877665', 1, 2, NULL, 'PASS-004', DATE '2027-07-30', 'thabo.mz@email.com', ID_inserts_B);
 
--- Cliente 4: Sudafricano viviendo en Filipinas
-INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
-VALUES (4, 'THABO', 'MOLEFE', 'ZULU', DATE '1982-07-30', 'DOC-SA-044', 998877665, 1, 2, NULL, 'PASS-004', DATE '2027-07-30', 'thabo.mz@email.com');
+    -- Cliente 5: Filipina viviendo en Irlanda
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('MARIA', 'SANTOS', 'REYES', DATE '2000-12-05', 'DOC-PH-055', '+66 7788990', 2, 3, 'ISABEL', 'PASS-005', DATE '2032-12-05', 'maria.reyes@email.com', ID_inserts_B);
 
--- Cliente 5: Filipina viviendo en Irlanda
-INSERT INTO CLIENTES_LEGO (ID_CLIENTE, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, TELEFONO, NACIMIENTO, RESIDENCIA, S_NOMBRE, NUM_PASS, F_VEN_PASS, EMAIL)
-VALUES (5, 'MARIA', 'SANTOS', 'REYES', DATE '2000-12-05', 'DOC-PH-055', 667788990, 2, 3, 'ISABEL', 'PASS-005', DATE '2032-12-05', 'maria.reyes@email.com');
+    COMMIT;
 
-COMMIT;
 
---FANS_MENOR_LEGO
--- Fan 1: Un niño de 10 años (Chile, ID 4). Representado por Cliente 1.
-INSERT INTO FANS_MENOR_LEGO (ID_FAN, NACIMIENTO, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
-VALUES (1, 4, 'TOMAS', 'SOTO', 'DIAZ', DATE '2015-06-01', 'DOC-FAN-CH-1', NULL, 1, 'PASS-FAN-01', DATE '2028-03-15');
+    --FANS_MENOR_LEGO
+    -- Fan 1: Un niño de 10 años (Chile, ID 4). Representado por Cliente 1.
+    pkg_lego_inserts_t.SP_INSERT_FAN('TOMAS', 'SOTO', 'DIAZ', 4, DATE '2015-06-01', 'DOC-FAN-CH-1', NULL, 1, 'PASS-FAN-01', DATE '2028-03-15', ID_inserts_B);
 
--- Fan 2: Una joven de 19 años (Irlanda, ID 3). Es mayor de 18 pero menor de 21.
-INSERT INTO FANS_MENOR_LEGO (ID_FAN, NACIMIENTO, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
-VALUES (2, 3, 'CIARA', 'O-CONNOR', 'WALSH', DATE '2006-03-15', 'DOC-FAN-IR-2', NULL, 2, 'PASS-FAN-02', DATE '2028-03-15');
+    -- Fan 2: Una joven de 19 años (Irlanda, ID 3). Es mayor de 18 pero menor de 21.
+    -- Nota: Al ser > 18, el representante podría ser opcional, pero asignamos al Cliente 2.
+    pkg_lego_inserts_t.SP_INSERT_FAN('CIARA', 'O-CONNOR', 'WALSH', 3, DATE '2006-03-15', 'DOC-FAN-IR-2', NULL, 2, 'PASS-FAN-02', DATE '2028-03-15', ID_inserts_B);
 
--- Fan 3: Un niño de 7 años (Indonesia, ID 5). Representado por Cliente 3.
-INSERT INTO FANS_MENOR_LEGO (ID_FAN, NACIMIENTO, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
-VALUES (3, 5, 'SARI', 'SANTOS', 'KUSUMA', DATE '2018-09-09', 'DOC-FAN-IN-3', NULL, 3, 'PASS-FAN-03', DATE '2028-03-15');
+    -- Fan 3: Un niño de 7 años (Indonesia, ID 5). Representado por Cliente 3.
+    pkg_lego_inserts_t.SP_INSERT_FAN('SARI', 'SANTOS', 'KUSUMA', 5, DATE '2018-09-09', 'DOC-FAN-IN-3', NULL, 3, 'PASS-FAN-03', DATE '2028-03-15', ID_inserts_B);
 
--- Fan 4: Un adolescente de 16 años (Sudáfrica, ID 1). Representado por Cliente 4.
-INSERT INTO FANS_MENOR_LEGO (ID_FAN, NACIMIENTO, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
-VALUES (4, 1, 'LEO', 'MOLEFE', 'KHUMALO', DATE '2009-11-20', 'DOC-FAN-SA-4', NULL, 4, 'PASS-FAN-04', DATE '2029-11-20');
+    -- Fan 4: Un adolescente de 16 años (Sudáfrica, ID 1). Representado por Cliente 4.
+    pkg_lego_inserts_t.SP_INSERT_FAN('LEO', 'MOLEFE', 'KHUMALO', 1, DATE '2009-11-20', 'DOC-FAN-SA-4', NULL, 4, 'PASS-FAN-04', DATE '2029-11-20', ID_inserts_B);
 
--- Fan 5: Joven surcoreano de 20 años (Nacido en 2005).
-INSERT INTO FANS_MENOR_LEGO (ID_FAN, NACIMIENTO, P_NOMBRE, P_APELLIDO, S_APELLIDO, FECHA_NAC, NUM_DOC, S_NOMBRE, ID_REPRESENTANTE, NUM_PASS, F_VEN_PASS)
-VALUES (5, 6, 'MIN-JI', 'KIM', 'LEE', DATE '2005-06-15', 'DOC-FAN-KR-5', NULL, NULL, 'PASS-FAN-05', DATE '2035-06-15');
+    -- Fan 5: Joven surcoreano de 20 años (Nacido en 2005).
+    -- Al ser mayor de 18, el campo ID_REPRESENTANTE puede ser NULL.
+    pkg_lego_inserts_t.SP_INSERT_FAN('MIN-JI', 'KIM', 'LEE', 6, DATE '2005-06-15', 'DOC-FAN-KR-5', NULL, NULL, 'PASS-FAN-05', DATE '2035-06-15', ID_inserts_B);
 
-COMMIT;
+    COMMIT;
+END;
+/
 
 -- ESTADOS
 INSERT ALL
