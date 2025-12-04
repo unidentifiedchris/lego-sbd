@@ -637,6 +637,155 @@ END pkg_lego_updates_t;
 /
 
 
+-- VIEWS
+
+-- =================================================================
+-- V_CLIENTES_LEGO
+-- A view to display client information in a user-friendly format,
+-- replacing null values with '--' for better readability.
+-- =================================================================
+CREATE OR REPLACE VIEW V_CLIENTES_LEGO AS
+SELECT
+    c.p_nombre AS "Primer Nombre",
+    NVL(c.s_nombre, '--') AS "Segundo Nombre",
+    c.p_apellido AS "Primer Apellido",
+    c.s_apellido AS "Segundo Apellido",
+    TO_CHAR(c.fecha_nac, 'YYYY-MM-DD') AS "Fecha de Nacimiento",
+    c.num_doc AS "Documento de Identidad",
+    p.nombre AS "Pais de Nacimiento",
+    r.nombre AS "Pais de Residencia",
+    c.telefono AS "Telefono",
+    NVL(c.num_pass, '--') AS "Pasaporte",
+    NVL(TO_CHAR(c.f_ven_pass, 'YYYY-MM-DD'), '--') AS "Fecha de Vencimiento Pasaporte",
+    NVL(c.email, '--') AS "Correo Electronico"
+FROM
+    CLIENTES_LEGO c, PAISES p, PAISES r
+        WHERE c.nacimiento = p.id_pais
+        AND c.residencia = r.id_pais;
+
+COMMIT;
+
+-- =================================================================
+-- V_FANS_MENOR_LEGO
+-- A view to display minor fan information, including details
+-- about their legal representative from the CLIENTES_LEGO table.
+-- =================================================================
+CREATE OR REPLACE VIEW V_FANS_MENOR_LEGO AS
+SELECT
+    f.p_nombre AS "Primer Nombre",
+    NVL(f.s_nombre, '--') AS "Segundo Nombre",
+    f.p_apellido AS "Primer Apellido",
+    f.s_apellido AS "Segundo Apellido",
+    TO_CHAR(f.fecha_nac, 'YYYY-MM-DD') AS "Fecha de Nacimiento",
+    f.num_doc AS "Documento de Identidad",
+    p.nombre AS "Pais de Nacimiento",
+    NVL(f.num_pass, '--') AS "Pasaporte",
+    NVL(TO_CHAR(f.f_ven_pass, 'YYYY-MM-DD'), '--') AS "Fecha de Vencimiento Pasaporte",
+    NVL(TRIM(c.p_nombre || ' ' || c.s_nombre || ' ' || c.p_apellido || ' ' || c.s_apellido), '--') AS "Nombre Representante",
+    NVL(c.num_doc, '--') AS "Documento de Identidad Representante"
+FROM
+    FANS_MENOR_LEGO f, PAISES p, CLIENTES_LEGO c
+        WHERE f.nacimiento = p.id_pais
+        AND f.id_representante = c.id_cliente (+);
+
+COMMIT;
+
+-- =================================================================
+-- V_INSIDE_TOURS_SUMMARY
+-- A view to display a summary of each tour, including the end date
+-- and the number of available slots remaining.
+-- =================================================================
+CREATE OR REPLACE VIEW V_INSIDE_TOURS_SUMMARY AS
+SELECT
+    TO_CHAR(it.f_inicio, 'YYYY-MM-DD') AS "Fecha de Inicio",
+    TO_CHAR(it.f_inicio + 2, 'YYYY-MM-DD') AS "Fecha de Fin",
+    it.precio_persona AS "Precio por Persona",
+    (it.total_cupos - FN_COUNT_INSCRITOS_BY_DATE(it.f_inicio)) AS "Cupos Disponibles"
+FROM
+    INSIDE_TOURS it;
+
+COMMIT;
+
+-- =================================================================
+-- V_TOUR_INSCRIPCIONES
+-- A detailed view linking tours with their corresponding inscriptions.
+-- Data is ordered by tour date and inscription number for clarity.
+-- =================================================================
+CREATE OR REPLACE VIEW V_TOUR_INSCRIPCIONES AS
+SELECT
+    TO_CHAR(it.f_inicio, 'YYYY-MM-DD') AS "Fecha de Inicio",
+    TO_CHAR(it.f_inicio + 2, 'YYYY-MM-DD') AS "Fecha de Fin",
+    ins.num_inscripcion AS "Numero de Inscripcion",
+    TO_CHAR(ins.f_inscripcion, 'YYYY-MM-DD') AS "Fecha de Inscripcion",
+    ins.total AS "Total a Pagar",
+    ins.status_conf AS "Estatus de Confirmacion"
+FROM
+    INSIDE_TOURS it, INSCRIPCIONES_TOUR ins
+        WHERE it.f_inicio = ins.f_inicio (+);
+
+COMMIT;
+
+-- =================================================================
+-- V_INSCRITOS_DETALLE
+-- A view to show details for each participant in an inscription,
+-- identifying them as 'Mayor' or 'Menor' and pulling their name.
+-- =================================================================
+CREATE OR REPLACE VIEW V_INSCRITOS_DETALLE AS
+SELECT
+    i.num_inscripcion AS "Numero de Inscripcion",
+    CASE
+        WHEN i.participante_mayor IS NOT NULL THEN 'Mayor'
+        ELSE 'Menor'
+    END AS "Tipo",
+    NVL(c.p_nombre, f.p_nombre) AS "Nombre",
+    NVL(c.p_apellido, f.p_apellido) AS "Apellido"
+FROM
+    INSCRITOS i, CLIENTES_LEGO c, FANS_MENOR_LEGO f
+WHERE
+    i.participante_mayor = c.id_cliente (+)
+    AND i.participante_menor = f.id_fan (+)
+ORDER BY
+    i.num_inscripcion, i.id_inscritos;
+
+COMMIT;
+
+-- =================================================================
+-- V_ENTRADAS_DETALLE
+-- A simple view to list all tickets associated with an inscription.
+-- =================================================================
+CREATE OR REPLACE VIEW V_ENTRADAS_DETALLE AS
+SELECT
+    num_inscripcion AS "Numero de Inscripcion",
+    num_entrada AS "Numero de Entrada",
+    tipo AS "Tipo de Entrada"
+FROM
+    ENTRADAS
+ORDER BY
+    num_inscripcion, num_entrada;
+
+COMMIT;
+
+-- =================================================================
+-- V_TOUR_INSCRIPCIONES_CONVERSION
+-- A detailed view for a specific inscription, showing the total
+-- cost converted to multiple currencies.
+-- =================================================================
+CREATE OR REPLACE VIEW V_TOUR_INSCRIPCIONES_CONVERSION AS
+SELECT
+    TO_CHAR(it.f_inicio, 'YYYY-MM-DD') AS "Fecha de Inicio",
+    TO_CHAR(it.f_inicio + 2, 'YYYY-MM-DD') AS "Fecha de Fin",
+    ins.num_inscripcion AS "Numero de Inscripcion",
+    TO_CHAR(ins.f_inscripcion, 'YYYY-MM-DD') AS "Fecha de Inscripcion",
+    ins.total AS "Total Euros",
+    FN_CALCULATE_CONVERSION(ins.total, 'D') AS "Total Dolares",
+    FN_CALCULATE_CONVERSION(ins.total, 'C') AS "Total Coronas Danesas",
+    ins.status_conf AS "Estatus de Confirmacion"
+FROM
+    INSIDE_TOURS it, INSCRIPCIONES_TOUR ins
+        WHERE it.f_inicio = ins.f_inicio;
+
+COMMIT;
+
 -- INSERTS FOR TEST DATA
 DECLARE ID_inserts_B number(5);
 BEGIN
