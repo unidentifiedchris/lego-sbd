@@ -285,12 +285,25 @@ END;
 COMMIT;
 
 -- SEQUENCES
+
 CREATE SEQUENCE S_PAISES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_CLIENTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_FANS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_INSCRIPCIONES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_INSCRITOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_ENTRADAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+-- TYPES
+
+CREATE OR REPLACE TYPE t_participant_doc_obj AS OBJECT (
+    is_menor NUMBER(1),      -- 1 for FANS_MENOR_LEGO, 0 for CLIENTES_LEGO
+    num_doc  VARCHAR2(50)    -- Document number to identify the person
+);
+/
+
+
+CREATE OR REPLACE TYPE t_participant_doc_tab AS TABLE OF t_participant_doc_obj;
+/
 
 
 -- PROCEDURES, FUNCTONS AND PACKAGES
@@ -634,6 +647,244 @@ CREATE OR REPLACE PACKAGE BODY pkg_lego_updates_t AS
    END SP_UPDATE_FAN;
 
 END pkg_lego_updates_t;
+/
+
+CREATE OR REPLACE PACKAGE pkg_lego_tours AS
+
+   /**
+    * @procedure SP_CREATE_INSCRIPCION_FLOW
+    * @desc Handles the end-to-end process of creating a tour inscription.
+    *       It validates tour capacity, registers participants, enforces age-related
+    *       rules, calculates totals, and generates tickets.
+    * @param p_f_inicio The start date of the INSIDE_TOUR.
+    * @param p_participants An array of objects identifying the participants by their document number.
+    * @param p_new_inscripcion_out Returns the generated NUM_INSCRIPCION for the new inscription.
+    */
+   PROCEDURE SP_CREATE_INSCRIPCION_FLOW(
+      p_f_inicio            IN DATE,
+      p_participants        IN t_participant_doc_tab,
+      p_new_inscripcion_out OUT NUMBER
+   );
+
+   /**
+    * @procedure SP_FINALIZE_PAYMENT
+    * @desc Confirms payment for an existing inscription, updates its status
+    *       to 'PAGO', and generates the corresponding tickets for all participants.
+    * @param p_f_inicio The start date of the tour for the inscription.
+    * @param p_num_inscripcion The inscription number to finalize.
+    */
+   PROCEDURE SP_FINALIZE_PAYMENT(
+      p_f_inicio IN DATE,
+      p_num_inscripcion IN NUMBER
+   );
+END pkg_lego_tours;
+/
+
+-- 4. Package Body
+CREATE OR REPLACE PACKAGE BODY pkg_lego_tours AS
+
+   PROCEDURE SP_CREATE_INSCRIPCION_FLOW(
+      p_f_inicio            IN DATE,
+      p_participants        IN t_participant_doc_tab,
+      p_new_inscripcion_out OUT NUMBER
+   ) IS
+      -- Tour-related variables
+      v_total_cupos      NUMBER;
+      v_precio_persona   NUMBER(7, 2);
+      v_tour_exists      NUMBER;
+
+      -- Participant counting variables
+      v_current_inscritos_count NUMBER;
+      v_new_participant_count   NUMBER;
+
+      -- Inscription and looping variables
+      v_new_inscripcion_num NUMBER;
+      v_inscrito_id         NUMBER;
+      v_cliente_id          NUMBER;
+      v_fan_id              NUMBER;
+      v_fan_fecha_nac       DATE;
+      v_fan_rep_id          NUMBER;
+      v_rep_is_in_list      BOOLEAN;
+      v_total_calculado     NUMBER(9, 2);
+
+      -- Exception handling for participant logic
+      e_participant_not_found EXCEPTION;
+      PRAGMA EXCEPTION_INIT(e_participant_not_found, -20003);
+
+      -- Error handling variables
+      e_tour_not_found   EXCEPTION;
+      e_no_capacity      EXCEPTION;
+      PRAGMA EXCEPTION_INIT(e_tour_not_found, -20001);
+      PRAGMA EXCEPTION_INIT(e_no_capacity, -20002);
+
+   BEGIN
+      -- =================================================================
+      -- BLOCK 1: VERIFICATION
+      -- Check if the tour exists and has enough capacity.
+      -- =================================================================
+      -- Lock the tour row to prevent race conditions on capacity checks
+      BEGIN
+         SELECT TOTAL_CUPOS, PRECIO_PERSONA
+         INTO v_total_cupos, v_precio_persona
+         FROM INSIDE_TOURS
+         WHERE F_INICIO = p_f_inicio
+         FOR UPDATE NOWAIT;
+      EXCEPTION
+         WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20001, 'El Inside Tour para la fecha ' || TO_CHAR(p_f_inicio, 'YYYY-MM-DD') || ' no existe.');
+         WHEN OTHERS THEN
+            IF SQLCODE = -54 THEN -- Resource busy
+               RAISE_APPLICATION_ERROR(-20010, 'El registro del tour está siendo utilizado por otra transacción. Intente de nuevo.');
+            ELSE
+               RAISE;
+            END IF;
+      END;
+
+      -- Use the existing function to count current participants for the tour
+      v_current_inscritos_count := FN_COUNT_INSCRITOS_BY_DATE(p_f_inicio => p_f_inicio);
+
+      -- Get the number of new participants from the input collection
+      v_new_participant_count := p_participants.COUNT;
+
+      -- Check for available capacity
+      IF (v_current_inscritos_count + v_new_participant_count) > v_total_cupos THEN
+         RAISE_APPLICATION_ERROR(-20002, 'No hay cupos suficientes para el tour. Cupos disponibles: ' || (v_total_cupos - v_current_inscritos_count));
+      END IF;
+
+      -- =================================================================
+      -- BLOCK 2: CREATE INSCRIPTION & INSERT PARTICIPANTS
+      -- Create the main inscription record and then insert each participant.
+      -- =================================================================
+
+      -- Create the main INSCRIPCIONES_TOUR record with 'PENDIENTE' status.
+      -- We are using the modular insert procedure.
+      pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(
+         p_f_inicio          => p_f_inicio,
+         p_status_conf       => 'PENDIENTE',
+         p_num_inscripcion   => v_new_inscripcion_num
+      );
+
+      -- Assign the new inscription number to the OUT parameter
+      p_new_inscripcion_out := v_new_inscripcion_num;
+
+      -- Loop 1: Insert all adults (CLIENTES_LEGO, is_menor = 0)
+      FOR i IN 1 .. p_participants.COUNT LOOP
+         IF p_participants(i).is_menor = 0 THEN
+            BEGIN
+               -- Find the client's ID based on their document number
+               SELECT ID_CLIENTE
+               INTO v_cliente_id
+               FROM CLIENTES_LEGO
+               WHERE NUM_DOC = p_participants(i).num_doc;
+
+               -- Insert into INSCRITOS using the modular procedure
+               pkg_lego_inserts_t.SP_INSERT_INSCRITO(
+                  p_f_inicio           => p_f_inicio,
+                  p_num_inscripcion    => v_new_inscripcion_num,
+                  p_participante_mayor => v_cliente_id,
+                  p_id_out             => v_inscrito_id -- Not used here, but required by procedure
+               );
+            EXCEPTION
+               WHEN NO_DATA_FOUND THEN
+                  RAISE_APPLICATION_ERROR(-20003, 'El participante adulto con NUM_DOC ' || p_participants(i).num_doc || ' no fue encontrado en CLIENTES_LEGO.');
+            END;
+         END IF;
+      END LOOP;
+
+      -- Loop 2: Insert all minors (FANS_MENOR_LEGO, is_menor = 1)
+      -- The TRG_INSCRITOS_MINOR_REP_CHECK trigger will automatically validate
+      -- that the representative for any minor under 18 is also being inscribed.
+      FOR i IN 1 .. p_participants.COUNT LOOP
+         IF p_participants(i).is_menor = 1 THEN
+            BEGIN
+               -- Find the fan's ID based on their document number
+               SELECT ID_FAN
+               INTO v_fan_id
+               FROM FANS_MENOR_LEGO
+               WHERE NUM_DOC = p_participants(i).num_doc;
+
+               -- Insert into INSCRITOS using the modular procedure
+               pkg_lego_inserts_t.SP_INSERT_INSCRITO(
+                  p_f_inicio           => p_f_inicio,
+                  p_num_inscripcion    => v_new_inscripcion_num,
+                  p_participante_menor => v_fan_id,
+                  p_id_out             => v_inscrito_id -- Not used here, but required by procedure
+               );
+            EXCEPTION
+               WHEN NO_DATA_FOUND THEN
+                  RAISE_APPLICATION_ERROR(-20003, 'El participante menor con NUM_DOC ' || p_participants(i).num_doc || ' no fue encontrado en FANS_MENOR_LEGO.');
+               WHEN OTHERS THEN
+                  -- Catch potential errors from the trigger (e.g., -20026) and re-raise them
+                  -- with a more user-friendly message if desired, or just re-raise.
+                  IF SQLCODE = -20026 THEN
+                     RAISE_APPLICATION_ERROR(-20026, 'Error de validación: El representante legal de un menor de 18 años debe estar incluido en la misma inscripción.');
+                  ELSE
+                     RAISE; -- Re-raise any other unexpected errors
+                  END IF;
+            END;
+         END IF;
+      END LOOP;
+
+      -- =================================================================
+      -- BLOCK 3: CALCULATE TOTAL & AWAIT PAYMENT
+      -- Calculate the total cost and update the inscription.
+      -- =================================================================
+
+      -- Recalculate the number of participants for this specific inscription
+      v_new_participant_count := FN_COUNT_INSCRITOS_BY_INSCRIPCION(
+         p_f_inicio        => p_f_inicio,
+         p_num_inscripcion => v_new_inscripcion_num
+      );
+
+      -- Calculate the total price
+      v_total_calculado := v_new_participant_count * v_precio_persona;
+
+      -- Update the inscription with the calculated total
+      UPDATE INSCRIPCIONES_TOUR
+      SET TOTAL = v_total_calculado
+      WHERE F_INICIO = p_f_inicio
+        AND NUM_INSCRIPCION = v_new_inscripcion_num;
+
+      -- Display the message indicating the process is waiting for payment
+      DBMS_OUTPUT.PUT_LINE('Esperando por pago');
+
+      COMMIT;
+
+   END SP_CREATE_INSCRIPCION_FLOW;
+
+   PROCEDURE SP_FINALIZE_PAYMENT(
+      p_f_inicio IN DATE,
+      p_num_inscripcion IN NUMBER
+   ) IS
+   BEGIN
+      -- =================================================================
+      -- BLOCK 1: FINALIZE PAYMENT & GENERATE TICKETS
+      -- Simulate payment confirmation and create tickets for all participants.
+      -- =================================================================
+
+      -- Update the status to 'PAGO'
+      UPDATE INSCRIPCIONES_TOUR
+      SET STATUS_CONF = 'PAGO'
+      WHERE F_INICIO = p_f_inicio
+        AND NUM_INSCRIPCION = p_num_inscripcion;
+
+      -- Loop through the inscritos to generate an entrada for each
+      FOR r_inscrito IN (SELECT PARTICIPANTE_MENOR, PARTICIPANTE_MAYOR FROM INSCRITOS WHERE F_INICIO = p_f_inicio AND NUM_INSCRIPCION = p_num_inscripcion) LOOP
+         DECLARE
+            v_tipo_entrada VARCHAR2(7) := CASE WHEN r_inscrito.PARTICIPANTE_MENOR IS NOT NULL THEN 'MENOR' ELSE 'REGULAR' END;
+            v_num_entrada  NUMBER;
+         BEGIN
+            pkg_lego_inserts_t.SP_INSERT_ENTRADA(p_f_inicio, p_num_inscripcion, v_tipo_entrada, v_num_entrada);
+         END;
+      END LOOP;
+
+      -- Display the final confirmation message
+      DBMS_OUTPUT.PUT_LINE('Inscripcion paga');
+
+      COMMIT;
+   END SP_FINALIZE_PAYMENT;
+
+END pkg_lego_tours;
 /
 
 
