@@ -1038,98 +1038,230 @@ FROM
 COMMIT;
 
 -- INSERTS FOR TEST DATA
-DECLARE ID_inserts_B number(5);
+DECLARE
+    -- Variables for IDs to manage foreign keys
+    v_id_pais_sa      NUMBER;
+    v_id_pais_ph      NUMBER;
+    v_id_pais_ie      NUMBER;
+    v_id_pais_cl      NUMBER;
+    v_id_pais_id      NUMBER;
+    v_id_pais_kr      NUMBER;
+
+    v_id_cliente_1    NUMBER;
+    v_id_cliente_2    NUMBER;
+    v_id_cliente_3    NUMBER;
+    v_id_cliente_4    NUMBER;
+    v_id_cliente_5    NUMBER;
+    v_id_cliente_6    NUMBER;
+    v_id_cliente_7    NUMBER;
+    v_id_cliente_8    NUMBER;
+    v_id_cliente_9    NUMBER;
+    v_id_cliente_10   NUMBER;
+
+    v_id_fan_1        NUMBER;
+    v_id_fan_2        NUMBER;
+    v_id_fan_3        NUMBER;
+    v_id_fan_4        NUMBER;
+    v_id_fan_5        NUMBER;
+    v_id_fan_6        NUMBER;
+    v_id_fan_7        NUMBER;
+    v_id_fan_8        NUMBER;
+    v_id_fan_9        NUMBER;
+    v_id_fan_10       NUMBER;
+
+    v_num_inscripcion NUMBER;
+    v_num_entrada     NUMBER;
+    v_precio_tour     NUMBER;
+    v_inscrito_id     NUMBER;
 BEGIN
     -- PAISES
     -- 1. Sudáfrica
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Sudafrica', 'Sudafricana', 'AFRICA', 0, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Sudafrica', 'Sudafricana', 'AFRICA', 0, v_id_pais_sa);
 
     -- 2. Filipinas
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Filipinas', 'Filipina', 'ASIA', 0, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Filipinas', 'Filipina', 'ASIA', 0, v_id_pais_ph);
 
     -- 3. Irlanda (Es miembro de la UE)
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Irlanda', 'Irlandesa', 'EUROPA', 1, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Irlanda', 'Irlandesa', 'EUROPA', 1, v_id_pais_ie);
 
     -- 4. Chile
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Chile', 'Chilena', 'AMERICA', 0, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Chile', 'Chilena', 'AMERICA', 0, v_id_pais_cl);
 
     -- 5. Indonesia
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Indonesia', 'Indonesa', 'ASIA', 0, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Indonesia', 'Indonesa', 'ASIA', 0, v_id_pais_id);
 
     -- 6. Corea del Sur
-    pkg_lego_inserts_t.SP_INSERT_PAIS('Corea del Sur', 'Surcoreana', 'ASIA', 0, ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_PAIS('Corea del Sur', 'Surcoreana', 'ASIA', 0, v_id_pais_kr);
 
     COMMIT;
 
     -- INSIDE_TOURS
     -- TOUR 1: Año 2024 (Precio base 250.00 €)
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-10', 250.00, 20);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-10', 25.00, 25);
 
     -- TOUR 2: Año 2024.
     -- Fecha válida: El anterior terminó el 12 (10, 11, 12). Este empieza el 15.
     -- Precio: Debe ser IGUAL al anterior por ser del mismo año.
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-15', 250.00, 25);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2024-01-15', 25.00, 25);
 
     -- TOUR 3: Año 2025 (Nuevo año, el precio sube a 300.50 €)
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-01', 300.50, 30);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-01', 30.50, 30);
 
     -- TOUR 4: Año 2025.
     -- Fecha válida: El anterior ocupó 1, 2 y 3 de mayo. Este empieza el 5 de mayo.
     -- Precio: Debe ser 300.50 (igual que el otro del 2025).
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-05', 300.50, 30);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-05', 30.50, 30);
 
     -- TOUR 5: Año 2025.
     -- Fecha límite: Empieza justo después del anterior (5, 6, 7 ocupados -> empieza el 8).
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-08', 300.50, 15);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2025-05-08', 30.50, 30);
     -- TOUR 6: Año 2026 (Nuevo precio anual: 350.00 €)
     -- Duración: 10, 11 y 12 de Marzo.
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-10', 350.00, 20);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-10', 35.00, 20);
 
     -- TOUR 7: Año 2026
     -- Fecha: 20 de Marzo (No se solapa con el anterior que terminó el 12).
     -- Precio: Debe mantenerse en 350.00 por ser del mismo año 2026.
-    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-20', 350.00, 15);
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-03-20', 35.00, 20);
+
+    -- TOUR 8: Año 2026
+    -- Fecha: 1 de Abril (No se solapa con el anterior que terminó el 22 de marzo).
+    -- Precio: Debe mantenerse en 350.00 por ser del mismo año 2026.
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-04-01', 35.00, 20);
+
+    -- TOUR 9: Año 2026
+    -- Fecha: 5 de Abril (No se solapa con el anterior que terminó el 3 de abril).
+    pkg_lego_inserts_t.SP_INSERT_INSIDE_TOUR(DATE '2026-04-05', 35.00, 20);
 
     COMMIT;
 
     -- CLIENTES_LEGO
     -- Cliente 1: Chileno viviendo en Chile
-    pkg_lego_inserts_t.SP_INSERT_CLIENTE('JUAN', 'SOTO', 'MUNOZ', DATE '1990-05-15', 'DOC-CH-001', '+98 7654321', 4, 4, 'CARLOS', 'PASS-001', DATE '2030-05-15', 'juan.soto@email.com', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('JUAN', 'SOTO', 'MUNOZ', DATE '1990-05-15', 'DOC-CH-001', '+98 7654321', v_id_pais_cl, v_id_pais_cl, 'CARLOS', 'PASS-001', DATE '2030-05-15', 'juan.soto@email.com', v_id_cliente_1);
 
     -- Cliente 2: Irlandesa viviendo en Irlanda
-    pkg_lego_inserts_t.SP_INSERT_CLIENTE('SIOBHAN', 'O-CONNOR', 'SMITH', DATE '1988-11-20', 'DOC-IR-022', '+44 5566778', 3, 3, NULL, 'PASS-002', DATE '2029-11-20', 'siobhan.oc@email.com', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('SIOBHAN', 'O-CONNOR', 'SMITH', DATE '1988-11-20', 'DOC-IR-022', '+44 5566778', v_id_pais_ie, v_id_pais_ie, NULL, 'PASS-002', DATE '2029-11-20', 'siobhan.oc@email.com', v_id_cliente_2);
 
     -- Cliente 3: Indonesio viviendo en Corea del Sur
-    pkg_lego_inserts_t.SP_INSERT_CLIENTE('BUDI', 'SANTOSO', 'PUTRA', DATE '1995-02-10', 'DOC-IN-033', '+11 2233445', 5, 6, 'DARMA', 'PASS-003', DATE '2028-02-10', 'budi.santoso@email.com', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('BUDI', 'SANTOSO', 'PUTRA', DATE '1995-02-10', 'DOC-IN-033', '+11 2233445', v_id_pais_id, v_id_pais_kr, 'DARMA', 'PASS-003', DATE '2028-02-10', 'budi.santoso@email.com', v_id_cliente_3);
 
     -- Cliente 4: Sudafricano viviendo en Filipinas
-    pkg_lego_inserts_t.SP_INSERT_CLIENTE('THABO', 'MOLEFE', 'ZULU', DATE '1982-07-30', 'DOC-SA-044', '+99 8877665', 1, 2, NULL, 'PASS-004', DATE '2027-07-30', 'thabo.mz@email.com', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('THABO', 'MOLEFE', 'ZULU', DATE '1982-07-30', 'DOC-SA-044', '+99 8877665', v_id_pais_sa, v_id_pais_ph, NULL, 'PASS-004', DATE '2027-07-30', 'thabo.mz@email.com', v_id_cliente_4);
 
     -- Cliente 5: Filipina viviendo en Irlanda
-    pkg_lego_inserts_t.SP_INSERT_CLIENTE('MARIA', 'SANTOS', 'REYES', DATE '2000-12-05', 'DOC-PH-055', '+66 7788990', 2, 3, 'ISABEL', 'PASS-005', DATE '2032-12-05', 'maria.reyes@email.com', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('MARIA', 'SANTOS', 'REYES', DATE '2000-12-05', 'DOC-PH-055', '+66 7788990', v_id_pais_ph, v_id_pais_ie, 'ISABEL', 'PASS-005', DATE '2032-12-05', 'maria.reyes@email.com', v_id_cliente_5);
+
+    -- Cliente 6: Sudafricano viviendo en Sudáfrica
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('JABULANI', 'DLAMINI', 'NKOSI', DATE '1975-03-25', 'DOC-SA-066', '+27 821234567', v_id_pais_sa, v_id_pais_sa, NULL, 'PASS-006', DATE '2028-08-15', 'jabulani.d@email.com', v_id_cliente_6);
+
+    -- Cliente 7: Irlandés viviendo en Chile
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('SEAN', 'MURPHY', 'KELLY', DATE '1992-08-12', 'DOC-IR-077', '+56 987654321', v_id_pais_ie, v_id_pais_cl, 'PATRICK', 'PASS-007', DATE '2031-01-20', 'sean.murphy@email.com', v_id_cliente_7);
+
+    -- Cliente 8: Coreana viviendo en Corea del Sur
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('SOO-JIN', 'PARK', 'CHOI', DATE '1980-11-30', 'DOC-KR-088', '+82 1098765432', v_id_pais_kr, v_id_pais_kr, NULL, 'PASS-008', DATE '2026-11-30', 'soojin.park@email.com', v_id_cliente_8);
+
+    -- Cliente 9: Indonesio viviendo en Indonesia
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('AGUNG', 'WIDODO', 'HIDAYAT', DATE '1989-01-18', 'DOC-IN-099', '+62 8123456789', v_id_pais_id, v_id_pais_id, 'DEWI', 'PASS-009', DATE '2029-05-22', 'agung.w@email.com', v_id_cliente_9);
+
+    -- Cliente 10: Chilena viviendo en Irlanda
+    pkg_lego_inserts_t.SP_INSERT_CLIENTE('CAMILA', 'ROJAS', 'VERGARA', DATE '1998-07-07', 'DOC-CL-101', '+353 876543210', v_id_pais_cl, v_id_pais_ie, NULL, 'PASS-010', DATE '2033-07-07', 'camila.rojas@email.com', v_id_cliente_10);
 
     COMMIT;
 
 
     --FANS_MENOR_LEGO
     -- Fan 1: Un niño de 10 años (Chile, ID 4). Representado por Cliente 1.
-    pkg_lego_inserts_t.SP_INSERT_FAN('TOMAS', 'SOTO', 'DIAZ', 4, DATE '2015-06-01', 'DOC-FAN-CH-1', NULL, 1, 'PASS-FAN-01', DATE '2028-03-15', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_FAN('TOMAS', 'SOTO', 'DIAZ', v_id_pais_cl, DATE '2015-06-01', 'DOC-FAN-CH-1', NULL, v_id_cliente_1, 'PASS-FAN-01', DATE '2028-03-15', v_id_fan_1);
 
     -- Fan 2: Una joven de 19 años (Irlanda, ID 3). Es mayor de 18 pero menor de 21.
     -- Nota: Al ser > 18, el representante podría ser opcional, pero asignamos al Cliente 2.
-    pkg_lego_inserts_t.SP_INSERT_FAN('CIARA', 'O-CONNOR', 'WALSH', 3, DATE '2006-03-15', 'DOC-FAN-IR-2', NULL, 2, 'PASS-FAN-02', DATE '2028-03-15', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_FAN('CIARA', 'O-CONNOR', 'WALSH', v_id_pais_ie, DATE '2006-03-15', 'DOC-FAN-IR-2', NULL, v_id_cliente_2, 'PASS-FAN-02', DATE '2028-03-15', v_id_fan_2);
 
     -- Fan 3: Un niño de 7 años (Indonesia, ID 5). Representado por Cliente 3.
-    pkg_lego_inserts_t.SP_INSERT_FAN('SARI', 'SANTOS', 'KUSUMA', 5, DATE '2018-09-09', 'DOC-FAN-IN-3', NULL, 3, 'PASS-FAN-03', DATE '2028-03-15', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_FAN('SARI', 'SANTOS', 'KUSUMA', v_id_pais_id, DATE '2018-09-09', 'DOC-FAN-IN-3', NULL, v_id_cliente_3, 'PASS-FAN-03', DATE '2028-03-15', v_id_fan_3);
 
     -- Fan 4: Un adolescente de 16 años (Sudáfrica, ID 1). Representado por Cliente 4.
-    pkg_lego_inserts_t.SP_INSERT_FAN('LEO', 'MOLEFE', 'KHUMALO', 1, DATE '2009-11-20', 'DOC-FAN-SA-4', NULL, 4, 'PASS-FAN-04', DATE '2029-11-20', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_FAN('LEO', 'MOLEFE', 'KHUMALO', v_id_pais_sa, DATE '2009-11-20', 'DOC-FAN-SA-4', NULL, v_id_cliente_4, 'PASS-FAN-04', DATE '2029-11-20', v_id_fan_4);
 
     -- Fan 5: Joven surcoreano de 20 años (Nacido en 2005).
     -- Al ser mayor de 18, el campo ID_REPRESENTANTE puede ser NULL.
-    pkg_lego_inserts_t.SP_INSERT_FAN('MIN-JI', 'KIM', 'LEE', 6, DATE '2005-06-15', 'DOC-FAN-KR-5', NULL, NULL, 'PASS-FAN-05', DATE '2035-06-15', ID_inserts_B);
+    pkg_lego_inserts_t.SP_INSERT_FAN('MIN-JI', 'KIM', 'LEE', v_id_pais_kr, DATE '2005-06-15', 'DOC-FAN-KR-5', NULL, NULL, 'PASS-FAN-05', DATE '2035-06-15', v_id_fan_5);
+
+    -- Fan 6: Niño de 5 años (Sudáfrica). Representado por Cliente 6.
+    pkg_lego_inserts_t.SP_INSERT_FAN('AMARA', 'DLAMINI', 'SITHOLE', v_id_pais_sa, DATE '2020-02-20', 'DOC-FAN-SA-6', NULL, v_id_cliente_6, 'PASS-FAN-06', DATE '2030-02-20', v_id_fan_6);
+
+    -- Fan 7: Joven de 19 años (Irlanda). Representado por Cliente 7.
+    pkg_lego_inserts_t.SP_INSERT_FAN('AOIFE', 'MURPHY', 'BYRNE', v_id_pais_ie, DATE '2006-09-01', 'DOC-FAN-IR-7', NULL, v_id_cliente_7, 'PASS-FAN-07', DATE '2029-09-01', v_id_fan_7);
+
+    -- Fan 8: Niña de 12 años (Corea del Sur). Representada por Cliente 8.
+    pkg_lego_inserts_t.SP_INSERT_FAN('JI-HOO', 'PARK', 'KANG', v_id_pais_kr, DATE '2013-04-10', 'DOC-FAN-KR-8', NULL, v_id_cliente_8, 'PASS-FAN-08', DATE '2028-04-10', v_id_fan_8);
+
+    -- Fan 9: Adolescente de 17 años (Indonesia). Representado por Cliente 9.
+    pkg_lego_inserts_t.SP_INSERT_FAN('RATNA', 'WIDODO', 'LESTARI', v_id_pais_id, DATE '2008-12-24', 'DOC-FAN-IN-9', NULL, v_id_cliente_9, 'PASS-FAN-09', DATE '2027-12-24', v_id_fan_9);
+
+    -- Fan 10: Joven de 20 años (Chile). Sin representante.
+    pkg_lego_inserts_t.SP_INSERT_FAN('MATEO', 'ROJAS', 'SILVA', v_id_pais_cl, DATE '2005-11-11', 'DOC-FAN-CL-10', NULL, NULL, 'PASS-FAN-10', DATE '2034-11-11', v_id_fan_10);
 
     COMMIT;
+
+    -- Disable triggers to insert historical data
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_INSCRIPCION_FECHA_INICIO DISABLE';
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_INSCRITO_FECHA_INICIO DISABLE';
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_ENTRADA_FECHA_INICIO DISABLE';
+
+    -- INSCRIPCIONES, INSCRITOS, ENTRADAS
+
+    -- Inscription 1 for Tour in 2024 (Cliente 1 y Fan 1)
+    pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(DATE '2024-01-10', DATE '2023-12-01', 'PENDIENTE', 0, v_num_inscripcion);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2024-01-10', v_num_inscripcion, NULL, v_id_cliente_1, v_inscrito_id);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2024-01-10', v_num_inscripcion, v_id_fan_1, NULL, v_inscrito_id);
+    SELECT PRECIO_PERSONA INTO v_precio_tour FROM INSIDE_TOURS WHERE F_INICIO = DATE '2024-01-10';
+    UPDATE INSCRIPCIONES_TOUR SET STATUS_CONF = 'PAGO', TOTAL = (v_precio_tour * 2) WHERE F_INICIO = DATE '2024-01-10' AND NUM_INSCRIPCION = v_num_inscripcion;
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2024-01-10', v_num_inscripcion, 'REGULAR', v_num_entrada);
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2024-01-10', v_num_inscripcion, 'MENOR', v_num_entrada);
+
+    -- Inscription 2 for Tour in 2024 (Cliente 2, Cliente 5, Fan 2)
+    pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(DATE '2024-01-15', DATE '2023-12-10', 'PENDIENTE', 0, v_num_inscripcion);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2024-01-15', v_num_inscripcion, NULL, v_id_cliente_2, v_inscrito_id);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2024-01-15', v_num_inscripcion, NULL, v_id_cliente_5, v_inscrito_id);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2024-01-15', v_num_inscripcion, v_id_fan_2, NULL, v_inscrito_id);
+    SELECT PRECIO_PERSONA INTO v_precio_tour FROM INSIDE_TOURS WHERE F_INICIO = DATE '2024-01-15';
+    UPDATE INSCRIPCIONES_TOUR SET STATUS_CONF = 'PAGO', TOTAL = (v_precio_tour * 3) WHERE F_INICIO = DATE '2024-01-15' AND NUM_INSCRIPCION = v_num_inscripcion;
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2024-01-15', v_num_inscripcion, 'REGULAR', v_num_entrada);
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2024-01-15', v_num_inscripcion, 'REGULAR', v_num_entrada);
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2024-01-15', v_num_inscripcion, 'MENOR', v_num_entrada);
+
+    -- Inscription 3 for Tour in 2025 (Cliente 3, Fan 3)
+    pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(DATE '2025-05-01', DATE '2025-04-01', 'PENDIENTE', 0, v_num_inscripcion);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2025-05-01', v_num_inscripcion, NULL, v_id_cliente_3, v_inscrito_id);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2025-05-01', v_num_inscripcion, v_id_fan_3, NULL, v_inscrito_id);
+    SELECT PRECIO_PERSONA INTO v_precio_tour FROM INSIDE_TOURS WHERE F_INICIO = DATE '2025-05-01';
+    UPDATE INSCRIPCIONES_TOUR SET STATUS_CONF = 'PAGO', TOTAL = (v_precio_tour * 2) WHERE F_INICIO = DATE '2025-05-01' AND NUM_INSCRIPCION = v_num_inscripcion;
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2025-05-01', v_num_inscripcion, 'REGULAR', v_num_entrada);
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2025-05-01', v_num_inscripcion, 'MENOR', v_num_entrada);
+
+    -- Inscription 4 for Tour in 2025 (Cliente 4, Fan 4)
+    pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(DATE '2025-05-05', DATE '2025-04-15', 'PENDIENTE', 0, v_num_inscripcion);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2025-05-05', v_num_inscripcion, NULL, v_id_cliente_4, v_inscrito_id);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2025-05-05', v_num_inscripcion, v_id_fan_4, NULL, v_inscrito_id);
+    SELECT PRECIO_PERSONA INTO v_precio_tour FROM INSIDE_TOURS WHERE F_INICIO = DATE '2025-05-05';
+    UPDATE INSCRIPCIONES_TOUR SET STATUS_CONF = 'PAGO', TOTAL = (v_precio_tour * 2) WHERE F_INICIO = DATE '2025-05-05' AND NUM_INSCRIPCION = v_num_inscripcion;
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2025-05-05', v_num_inscripcion, 'REGULAR', v_num_entrada);
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2025-05-05', v_num_inscripcion, 'MENOR', v_num_entrada);
+
+    -- Inscription 5 for Tour in 2025 (Fan 5 only)
+    pkg_lego_inserts_t.SP_INSERT_INSCRIPCION(DATE '2025-05-08', DATE '2025-04-20', 'PENDIENTE', 0, v_num_inscripcion);
+    pkg_lego_inserts_t.SP_INSERT_INSCRITO(DATE '2025-05-08', v_num_inscripcion, v_id_fan_5, NULL, v_inscrito_id);
+    SELECT PRECIO_PERSONA INTO v_precio_tour FROM INSIDE_TOURS WHERE F_INICIO = DATE '2025-05-08';
+    UPDATE INSCRIPCIONES_TOUR SET STATUS_CONF = 'PAGO', TOTAL = (v_precio_tour * 1) WHERE F_INICIO = DATE '2025-05-08' AND NUM_INSCRIPCION = v_num_inscripcion;
+    pkg_lego_inserts_t.SP_INSERT_ENTRADA(DATE '2025-05-08', v_num_inscripcion, 'MENOR', v_num_entrada);
+
+    COMMIT;
+
+    -- Re-enable triggers
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_INSCRIPCION_FECHA_INICIO ENABLE';
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_INSCRITO_FECHA_INICIO ENABLE';
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_ENTRADA_FECHA_INICIO ENABLE';
 END;
 /
 
