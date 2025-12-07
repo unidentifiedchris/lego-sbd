@@ -201,6 +201,8 @@ CREATE TABLE HISTORICO_PRECIO (
 
 -- CREATE OR REPLACE TRIGGERS 
 
+
+
 -- CLIENTES_LEGO: must be at least 21 years old
 CREATE OR REPLACE TRIGGER TRG_CLIENTE_AGE
 BEFORE INSERT OR UPDATE ON CLIENTES_LEGO
@@ -242,6 +244,127 @@ BEGIN
         IF :NEW.NUM_PASS IS NULL OR :NEW.F_VEN_PASS IS NULL THEN
             RAISE_APPLICATION_ERROR(-20104, 'Para nacionalidades fuera de la Union Europea, se requieren NUM_pass y F_VEN_PASS');
         END IF;
+    END IF;
+END;
+/
+
+-- TRIGGER: reglas de consistencia para JUGUETES / SETS
+CREATE OR REPLACE TRIGGER TRG_JUGUETE_SET_RULES
+BEFORE INSERT OR UPDATE ON JUGUETES
+FOR EACH ROW
+DECLARE
+    v_es_set NUMBER(1);
+BEGIN
+    -- 1) Si ES_SET = 1, el juguete no puede pertenecer a otro set
+    IF :NEW.ES_SET = 1 THEN
+        IF :NEW.ID_SET IS NOT NULL THEN
+            RAISE_APPLICATION_ERROR(
+                -20110,
+                'Un set (ES_SET = 1) no puede pertenecer a otro set; ID_SET debe ser NULL'
+            );
+        END IF;
+    ELSE
+        -- 2) Si NO es set (ES_SET = 0), NUMERO_PIEZAS es obligatorio y > 0
+        IF :NEW.NUMERO_PIEZAS IS NULL OR :NEW.NUMERO_PIEZAS <= 0 THEN
+            RAISE_APPLICATION_ERROR(
+                -20111,
+                'NUMERO_PIEZAS obligatorio y mayor que 0 para juguetes individuales (ES_SET = 0)'
+            );
+        END IF;
+    END IF;
+
+    -- 3) Si ID_SET viene informado, debe apuntar a un juguete que realmente sea set (ES_SET = 1)
+    IF :NEW.ID_SET IS NOT NULL THEN
+        BEGIN
+            SELECT ES_SET
+            INTO   v_es_set
+            FROM   JUGUETES
+            WHERE  ID_JUGUETE = :NEW.ID_SET;
+
+            IF v_es_set <> 1 THEN
+                RAISE_APPLICATION_ERROR(
+                    -20112,
+                    'ID_SET debe referirse a un juguete con ES_SET = 1'
+                );
+            END IF;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(
+                    -20113,
+                    'El juguete indicado en ID_SET no existe'
+                );
+        END;
+    END IF;
+END;
+/
+
+-- TRIGGER: evitar historicos de precio concurrentes para el mismo juguete
+CREATE OR REPLACE TRIGGER TRG_HISTORICO_PRECIO_NO_OVERLAP
+BEFORE INSERT OR UPDATE ON HISTORICO_PRECIO
+FOR EACH ROW
+DECLARE
+    v_dummy   NUMBER;
+    v_new_ini DATE;
+    v_new_fin DATE;
+BEGIN
+    -- 1) Default de FECHA_INICIO en inserciones
+    IF INSERTING AND :NEW.FECHA_INICIO IS NULL THEN
+        :NEW.FECHA_INICIO := SYSDATE;
+    END IF;
+
+    -- 2) Validar orden de fechas (refuerza el CHECK)
+    IF :NEW.FECHA_FIN IS NOT NULL AND :NEW.FECHA_FIN <= :NEW.FECHA_INICIO THEN
+        RAISE_APPLICATION_ERROR(
+            -20120,
+            'FECHA_FIN debe ser posterior a FECHA_INICIO'
+        );
+    END IF;
+
+    v_new_ini := :NEW.FECHA_INICIO;
+    v_new_fin := NVL(:NEW.FECHA_FIN, DATE '9999-12-31');
+
+    -- 3) Verificar solapamiento con otros historicos del mismo juguete
+    IF INSERTING THEN
+        SELECT 1
+        INTO   v_dummy
+        FROM   HISTORICO_PRECIO h
+        WHERE  h.ID_JUGUETE = :NEW.ID_JUGUETE
+        AND    v_new_ini < NVL(h.FECHA_FIN, DATE '9999-12-31')
+        AND    h.FECHA_INICIO < v_new_fin
+        AND    ROWNUM = 1;
+    ELSE
+        -- En UPDATE ignoramos la propia fila (PK actual)
+        SELECT 1
+        INTO   v_dummy
+        FROM   HISTORICO_PRECIO h
+        WHERE  h.ID_JUGUETE = :NEW.ID_JUGUETE
+        AND    NOT (h.ID_JUGUETE = :OLD.ID_JUGUETE
+                    AND h.FECHA_INICIO = :OLD.FECHA_INICIO)
+        AND    v_new_ini < NVL(h.FECHA_FIN, DATE '9999-12-31')
+        AND    h.FECHA_INICIO < v_new_fin
+        AND    ROWNUM = 1;
+    END IF;
+
+    -- Si llegamos aquí sin lanzar NO_DATA_FOUND, hubo solapamiento
+    RAISE_APPLICATION_ERROR(
+        -20121,
+        'Ya existe un historial de precio solapado para este juguete'
+    );
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- No hay solapamientos: OK
+        NULL;
+END;
+/
+
+-- TRIGGER: asignar NUM_LOTE automáticamente usando S_LOTES_INVENTARIO
+CREATE OR REPLACE TRIGGER TRG_LOTES_INVENTARIO_AI
+BEFORE INSERT ON LOTES_INVENTARIO
+FOR EACH ROW
+BEGIN
+    IF :NEW.NUM_LOTE IS NULL THEN
+        :NEW.NUM_LOTE := S_LOTES_INVENTARIO.NEXTVAL;
     END IF;
 END;
 /
@@ -1953,6 +2076,10 @@ CREATE SEQUENCE S_FANS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_INSCRIPCIONES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_INSCRITOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_ENTRADAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_TEMAS              START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_JUGUETES           START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_LOTES_INVENTARIO   START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_DESCUENTOS_INV     START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
 -- TYPES
 
