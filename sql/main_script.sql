@@ -138,6 +138,17 @@ CREATE TABLE TEMAS (
     CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
 );
 
+CREATE TABLE TEMAS (
+    ID_TEMA           NUMBER(4)      PRIMARY KEY,
+    NOMBRE_TEMA       VARCHAR2(40)   NOT NULL,
+    DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
+    TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
+    LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
+
+    CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
+    CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
+);
+
 CREATE TABLE JUGUETES (
     ID_JUGUETE           NUMBER(5)    PRIMARY KEY,
     ID_TEMA              NUMBER(4)    NOT NULL,
@@ -212,13 +223,13 @@ create table Det_Factura_Fis(
     id_tienda number(4) not null,
     num_factura number(6) not null,
     id_det_fact number(6) not null,
-    NUMERO_LOTE  NUMBER(6)   NOT NULL,
-    -- ID_TIENDA    NUMBER(4)   NOT NULL, Duplicado en la llave foranea de arriba
-    ID_JUGUETE   NUMBER(5)   NOT NULL,
-    tipo_cliente varchar2(11) CONSTRAINT Det_Factura_Fis_tipo_cliente CHECK(tipo_cliente in ('NINNO', 'ADOLESCENTE', 'ADULTO')),
+    numero_lote  NUMBER(6)   NOT NULL,
+    id_juguete   NUMBER(5)   NOT NULL,
+    tipo_cliente varchar2(11),
+    CONSTRAINT Det_Factura_Fis_tipo_cliente CHECK(tipo_cliente in ('NINNO', 'ADOLESCENTE', 'ADULTO')),
     constraint Det_Factura_Fis_id_Factura_Fisica FOREIGN KEY (id_tienda,num_factura) REFERENCES Factura_Fisica(id_tienda,num_factura),
     constraint id_Det_Factura_Fis PRIMARY KEY (id_tienda,num_factura,id_det_fact),
-    CONSTRAINT Det_Factura_Fis_LOTES_INVENTARIO FOREIGN KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE) REFERENCES LOTES_INVENTARIO(NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
+    CONSTRAINT Det_Factura_Fis_LOTES_INVENTARIO FOREIGN KEY (numero_lote,id_tienda,id_juguete) REFERENCES LOTES_INVENTARIO(NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
 );
 
 create table Factura_online(
@@ -501,6 +512,106 @@ BEGIN
     -- dividing by 12, and taking the integer part.
     RETURN FLOOR(MONTHS_BETWEEN(SYSDATE, p_date) / 12);
 END FN_GET_AGE;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_CLIENTE_ID_BY_DOC(
+    p_num_doc IN VARCHAR2
+) RETURN NUMBER IS
+    v_cliente_id NUMBER;
+BEGIN
+    -- Look for the client ID in the CLIENTES_LEGO table
+    SELECT ID_CLIENTE
+    INTO v_cliente_id
+    FROM CLIENTES_LEGO
+    WHERE NUM_DOC = p_num_doc;
+
+    RETURN v_cliente_id;
+EXCEPTION
+    -- If no client is found, return NULL instead of raising an error
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL;
+END FN_GET_CLIENTE_ID_BY_DOC;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_FAN_ID_BY_DOC(
+    p_num_doc IN VARCHAR2
+) RETURN NUMBER IS
+    v_fan_id NUMBER;
+BEGIN
+    -- Look for the fan ID in the FANS_MENOR_LEGO table
+    SELECT ID_FAN
+    INTO v_fan_id
+    FROM FANS_MENOR_LEGO
+    WHERE NUM_DOC = p_num_doc;
+
+    RETURN v_fan_id;
+EXCEPTION
+    -- If no fan is found, return NULL
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL;
+END FN_GET_FAN_ID_BY_DOC;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_REP_DOC_BY_FAN_DOC(
+    p_fan_num_doc IN VARCHAR2
+) RETURN VARCHAR2 IS
+    v_rep_id NUMBER;
+    v_rep_num_doc VARCHAR2(50);
+BEGIN
+    -- First, find the representative's ID from the FANS_MENOR_LEGO table
+    SELECT ID_REPRESENTANTE
+    INTO v_rep_id
+    FROM FANS_MENOR_LEGO
+    WHERE NUM_DOC = p_fan_num_doc;
+
+    -- If a representative ID was found, get their document number
+    IF v_rep_id IS NOT NULL THEN
+        SELECT NUM_DOC
+        INTO v_rep_num_doc
+        FROM CLIENTES_LEGO
+        WHERE ID_CLIENTE = v_rep_id;
+        
+        RETURN v_rep_num_doc;
+    END IF;
+
+    RETURN NULL; -- Return NULL if no representative or fan not found
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL; -- Gracefully handle cases where the fan or rep is not found
+END FN_GET_REP_DOC_BY_FAN_DOC;
+/
+
+CREATE OR REPLACE PROCEDURE SP_GET_PARTICIPANT_BY_DOC(
+    p_num_doc IN VARCHAR2,
+    p_participant_id OUT NUMBER,
+    p_source_table OUT NUMBER
+) IS
+    v_cliente_id NUMBER;
+    v_fan_id     NUMBER;
+BEGIN
+    -- First, try to find the ID in the CLIENTES_LEGO table
+    v_cliente_id := FN_GET_CLIENTE_ID_BY_DOC(p_num_doc => p_num_doc);
+
+    IF v_cliente_id IS NOT NULL THEN
+        -- A client was found. Set the output parameters and exit.
+        p_participant_id := v_cliente_id;
+        p_source_table := 0;
+        RETURN;
+    END IF;
+
+    -- If no client was found, try to find the ID in the FANS_MENOR_LEGO table
+    v_fan_id := FN_GET_FAN_ID_BY_DOC(p_num_doc => p_num_doc);
+
+    IF v_fan_id IS NOT NULL THEN
+        -- A fan was found. Set the output parameters.
+        p_participant_id := v_fan_id;
+        p_source_table := 1;
+    ELSE
+        -- If no participant was found in either table, return NULL for both.
+        p_participant_id := NULL;
+        p_source_table := NULL;
+    END IF;
+END SP_GET_PARTICIPANT_BY_DOC;
 /
 
 CREATE OR REPLACE PACKAGE pkg_lego_inserts_t AS
@@ -1190,94 +1301,82 @@ COMMIT;
 CREATE OR REPLACE VIEW V_HORARIOS_TIENDAS AS
 SELECT *
 FROM (
-    SELECT 
-        J.NOMBRE AS JUGUETE,
-        J.DESCRIPCION AS DESCRIPCION
-    FROM JUGUETES J
+    SELECT
+        T.NOMBRE AS TIENDA,
+        H.DIA,
+        TO_CHAR(H.HORA_INICIO, 'HH24:MI') || ' - ' || TO_CHAR(H.HORA_FIN, 'HH24:MI') AS HORARIO
+    FROM TIENDAS T
     JOIN HORARIOS H ON T.ID_TIENDA = H.ID_TIENDA
 )
 PIVOT (-- DIVIDE LA COLUMNA DE LOS HORARIOS EN 7 COLUMNAS, UNA PARA CADA DIA
     MAX(HORARIO)
-    FOR NUM_DIA_SEMANA IN (
-        '2' AS LUNES,
-        '3' AS MARTES,
-        '4' AS MIERCOLES,
-        '5' AS JUEVES,
-        '6' AS VIERNES,
-        '7' AS SABADO,
-        '1' AS DOMINGO
+    FOR DIA IN (
+        2 AS LUNES,
+        3 AS MARTES,
+        4 AS MIERCOLES,
+        5 AS JUEVES,
+        6 AS VIERNES,
+        7 AS SABADO,
+        1 AS DOMINGO
     )
 )
 ORDER BY TIENDA;
---SE LE DA FORMATO A LAS COLUMNAS, PARA LA QUE INFORMACIÓN SE VEA "ORDENADA"
---MÁXIMO DE ESPACIO QUE OCUPA LA COLUMNA SON 35 CARACTERES
-COLUMN TIENDA FORMAT A35
---MÁXIMO DE ESPACIO QUE OCUPAN LAS COLUMNAS SON 15 CARACTERES
-COLUMN LUNES FORMAT A15
-COLUMN MARTES FORMAT A15
-COLUMN MIERCOLES FORMAT A15
-COLUMN JUEVES FORMAT A15
-COLUMN VIERNES FORMAT A15
-COLUMN SABADO FORMAT A15
-COLUMN DOMINGO FORMAT A15
-
-SELECT * FROM V_HORARIOS_TIENDAS;
 
 --UNA VEZ SE CREE JUGUETE, VERIFICAR ESTE, PARA LA TABLA Y EL ID
 --VIEW DE CADA UNO DE LOS CATÁLOGOS POR SEPARADO, PORQUE SE NECESITA UNO POR CADA PAIS PARA TIENDA ONLINE
 CREATE OR REPLACE VIEW V_CATALOGO_SUDAFRICA AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 1  -- Sudáfrica tiene ID 1
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 CREATE OR REPLACE VIEW V_CATALOGO_FILIPINAS AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 2  -- Filipinas tiene ID 2
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 CREATE OR REPLACE VIEW V_CATALOGO_IRLANDA AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 3  -- Irlanda tiene ID 3
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 CREATE OR REPLACE VIEW V_CATALOGO_CHILE AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 4  -- Chile tiene ID 4
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 CREATE OR REPLACE VIEW V_CATALOGO_INDONESIA AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 5  -- Indonesia tiene ID 5
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 CREATE OR REPLACE VIEW V_CATALOGO_COREA_SUR AS
 SELECT 
-    J.NOMBRE AS JUGUETE,
+    J.NOMBRE_JUGUETE AS JUGUETE,
     CP.LIMITE_COMPRA AS "Límite de Compra"
 FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 6  -- Corea del Sur tiene ID 6
-ORDER BY J.NOMBRE;
+ORDER BY J.NOMBRE_JUGUETE;
 
 -- INSERTS FOR TEST DATA
 DECLARE
