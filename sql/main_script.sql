@@ -170,8 +170,7 @@ CREATE TABLE LOTES_INVENTARIO (
     ID_TIENDA    NUMBER(4)   NOT NULL,
     ID_JUGUETE   NUMBER(5)   NOT NULL,
     CANTIDAD     NUMBER(6)   NOT NULL
-        CONSTRAINT CHK_LOTE_CANTIDAD(id_tienda,num_factura)
-            CHECK (CANTIDAD >= 0),
+        CONSTRAINT CHK_LOTE_CANTIDAD CHECK (CANTIDAD >= 0),
     CONSTRAINT FK_LOTE_TIENDA FOREIGN KEY (ID_TIENDA) REFERENCES TIENDAS (ID_TIENDA),
     CONSTRAINT FK_LOTE_JUGUETE FOREIGN KEY (ID_JUGUETE) REFERENCES JUGUETES (ID_JUGUETE),
     CONSTRAINT PK_LOTES_INVENTARIO PRIMARY KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
@@ -217,10 +216,10 @@ create table Det_Factura_Fis(
     NUMERO_LOTE  NUMBER(6)   NOT NULL,
     ID_TIENDA    NUMBER(4)   NOT NULL,
     ID_JUGUETE   NUMBER(5)   NOT NULL,
-    tipo_cliente varchar2(11) CONSTRAINT Det_Factura_Fis_tipo_cliente check(tipo_cliente in 'NINNO', 'ADOLESCENTE', 'ADULTO'),
-    constraint Det_Factura_Fis_id_Factura_Fisica foreign key (id_tienda,num_factura) REFERENCES Factura_Fisica(id_tienda,num_factura),
-    constraint id_Det_Factura_Fis PRIMARY key (id_tienda,num_factura,id_det_fact),
-    CONSTRAINT Det_Factura_Fis_LOTES_INVENTARIO foreign KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
+    tipo_cliente varchar2(11) CONSTRAINT Det_Factura_Fis_tipo_cliente CHECK(tipo_cliente in ('NINNO', 'ADOLESCENTE', 'ADULTO')),
+    constraint Det_Factura_Fis_id_Factura_Fisica FOREIGN KEY (id_tienda,num_factura) REFERENCES Factura_Fisica(id_tienda,num_factura),
+    constraint id_Det_Factura_Fis PRIMARY KEY (id_tienda,num_factura,id_det_fact),
+    CONSTRAINT Det_Factura_Fis_LOTES_INVENTARIO FOREIGN KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE) REFERENCES LOTES_INVENTARIO(NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
 );
 
 create table Factura_online(
