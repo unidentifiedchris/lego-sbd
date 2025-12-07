@@ -127,6 +127,17 @@ CREATE TABLE HORARIOS (
     CONSTRAINT CHK_HORA_FIN_FORMATO CHECK (REGEXP_LIKE(TO_CHAR(HORA_FIN, 'HH24:MI:SS'), '^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$'))
 );
 
+CREATE TABLE TEMAS (
+    ID_TEMA           NUMBER(4)      PRIMARY KEY,
+    NOMBRE_TEMA       VARCHAR2(40)   NOT NULL,
+    DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
+    TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
+    LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
+
+    CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
+    CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
+);
+
 CREATE TABLE JUGUETES (
     ID_JUGUETE           NUMBER(5)    PRIMARY KEY,
     ID_TEMA              NUMBER(4)    NOT NULL,
@@ -151,17 +162,6 @@ CREATE TABLE CATALOGO_PAIS (
     CONSTRAINT FK1_CATALOGO FOREIGN KEY (ID_PAIS) REFERENCES PAISES(ID_PAIS),
     CONSTRAINT FK2_CATALOGO FOREIGN KEY (ID_JUGUETE) REFERENCES JUGUETES(ID_JUGUETE),
     CONSTRAINT PK1_CATALOGO PRIMARY KEY (ID_PAIS, ID_JUGUETE)
-);
-
-CREATE TABLE TEMAS (
-    ID_TEMA           NUMBER(4)      PRIMARY KEY,
-    NOMBRE_TEMA       VARCHAR2(40)   NOT NULL,
-    DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
-    TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
-    LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
-
-    CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
-    CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
 );
 
 
@@ -501,6 +501,106 @@ BEGIN
     -- dividing by 12, and taking the integer part.
     RETURN FLOOR(MONTHS_BETWEEN(SYSDATE, p_date) / 12);
 END FN_GET_AGE;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_CLIENTE_ID_BY_DOC(
+    p_num_doc IN VARCHAR2
+) RETURN NUMBER IS
+    v_cliente_id NUMBER;
+BEGIN
+    -- Look for the client ID in the CLIENTES_LEGO table
+    SELECT ID_CLIENTE
+    INTO v_cliente_id
+    FROM CLIENTES_LEGO
+    WHERE NUM_DOC = p_num_doc;
+
+    RETURN v_cliente_id;
+EXCEPTION
+    -- If no client is found, return NULL instead of raising an error
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL;
+END FN_GET_CLIENTE_ID_BY_DOC;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_FAN_ID_BY_DOC(
+    p_num_doc IN VARCHAR2
+) RETURN NUMBER IS
+    v_fan_id NUMBER;
+BEGIN
+    -- Look for the fan ID in the FANS_MENOR_LEGO table
+    SELECT ID_FAN
+    INTO v_fan_id
+    FROM FANS_MENOR_LEGO
+    WHERE NUM_DOC = p_num_doc;
+
+    RETURN v_fan_id;
+EXCEPTION
+    -- If no fan is found, return NULL
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL;
+END FN_GET_FAN_ID_BY_DOC;
+/
+
+CREATE OR REPLACE FUNCTION FN_GET_REP_DOC_BY_FAN_DOC(
+    p_fan_num_doc IN VARCHAR2
+) RETURN VARCHAR2 IS
+    v_rep_id NUMBER;
+    v_rep_num_doc VARCHAR2(50);
+BEGIN
+    -- First, find the representative's ID from the FANS_MENOR_LEGO table
+    SELECT ID_REPRESENTANTE
+    INTO v_rep_id
+    FROM FANS_MENOR_LEGO
+    WHERE NUM_DOC = p_fan_num_doc;
+
+    -- If a representative ID was found, get their document number
+    IF v_rep_id IS NOT NULL THEN
+        SELECT NUM_DOC
+        INTO v_rep_num_doc
+        FROM CLIENTES_LEGO
+        WHERE ID_CLIENTE = v_rep_id;
+        
+        RETURN v_rep_num_doc;
+    END IF;
+
+    RETURN NULL; -- Return NULL if no representative or fan not found
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL; -- Gracefully handle cases where the fan or rep is not found
+END FN_GET_REP_DOC_BY_FAN_DOC;
+/
+
+CREATE OR REPLACE PROCEDURE SP_GET_PARTICIPANT_BY_DOC(
+    p_num_doc IN VARCHAR2,
+    p_participant_id OUT NUMBER,
+    p_source_table OUT NUMBER
+) IS
+    v_cliente_id NUMBER;
+    v_fan_id     NUMBER;
+BEGIN
+    -- First, try to find the ID in the CLIENTES_LEGO table
+    v_cliente_id := FN_GET_CLIENTE_ID_BY_DOC(p_num_doc => p_num_doc);
+
+    IF v_cliente_id IS NOT NULL THEN
+        -- A client was found. Set the output parameters and exit.
+        p_participant_id := v_cliente_id;
+        p_source_table := 0;
+        RETURN;
+    END IF;
+
+    -- If no client was found, try to find the ID in the FANS_MENOR_LEGO table
+    v_fan_id := FN_GET_FAN_ID_BY_DOC(p_num_doc => p_num_doc);
+
+    IF v_fan_id IS NOT NULL THEN
+        -- A fan was found. Set the output parameters.
+        p_participant_id := v_fan_id;
+        p_source_table := 1;
+    ELSE
+        -- If no participant was found in either table, return NULL for both.
+        p_participant_id := NULL;
+        p_source_table := NULL;
+    END IF;
+END SP_GET_PARTICIPANT_BY_DOC;
 /
 
 CREATE OR REPLACE PACKAGE pkg_lego_inserts_t AS
