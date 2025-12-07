@@ -209,7 +209,6 @@ create table Factura_Fisica(
     CONSTRAINT id_factura_fisica PRIMARY KEY (id_tienda,num_factura),
     CONSTRAINT Factura_Fisic_id_cliente foreign key (id_cliente) REFERENCES CLIENTES_LEGO(ID_CLIENTE)
 );
-- total es obligatorio pero se calcula mientras se insertan los productos
 
 create table Det_Factura_Fis(
     id_tienda number(4) not null,
@@ -223,7 +222,6 @@ create table Det_Factura_Fis(
     constraint id_Det_Factura_Fis PRIMARY key (id_tienda,num_factura,id_det_fact),
     CONSTRAINT Det_Factura_Fis_LOTES_INVENTARIO foreign KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
 );
-- TIPO DE CLIENTE AGRUPA RANGOS EDAD EN CATEGORIAS AMPLIAS AUTOMATICAMENTE
 
 create table Factura_online(
     num_factura number(4) primary key,
@@ -234,12 +232,6 @@ create table Factura_online(
     total number(9,2),
     CONSTRAINT Factura_online_id_cliente foreign key (id_cliente) REFERENCES CLIENTES_LEGO(ID_CLIENTE)
 );
- - total es calculado
-- total: precio productos + recargo (5% UE, 15% el resto)
-- puntos-acum-venta es calculado
-- gratis lealtad true si acumulado en venta online anterior puntos_acum_venta => 500
-- total en una venta gratis solo toma en cuenta el recargo de envio
-- LIMITE DE COMPRA ES UNIVERSAL, NO POR FACTURA
 
 create table Det_Factura_Onl(
     num_factura number(4) not null,
