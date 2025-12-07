@@ -127,6 +127,17 @@ CREATE TABLE HORARIOS (
     CONSTRAINT CHK_HORA_FIN_FORMATO CHECK (REGEXP_LIKE(TO_CHAR(HORA_FIN, 'HH24:MI:SS'), '^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$'))
 );
 
+CREATE TABLE TEMAS (
+    ID_TEMA           NUMBER(4)      PRIMARY KEY,
+    NOMBRE_TEMA       VARCHAR2(40)   NOT NULL,
+    DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
+    TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
+    LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
+
+    CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
+    CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
+);
+
 CREATE TABLE JUGUETES (
     ID_JUGUETE           NUMBER(5)    PRIMARY KEY,
     ID_TEMA              NUMBER(4)    NOT NULL,
@@ -152,18 +163,6 @@ CREATE TABLE CATALOGO_PAIS (
     CONSTRAINT FK2_CATALOGO FOREIGN KEY (ID_JUGUETE) REFERENCES JUGUETES(ID_JUGUETE),
     CONSTRAINT PK1_CATALOGO PRIMARY KEY (ID_PAIS, ID_JUGUETE)
 );
-
-CREATE TABLE TEMAS (
-    ID_TEMA           NUMBER(4)      PRIMARY KEY,
-    NOMBRE_TEMA       VARCHAR2(40)   NOT NULL,
-    DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
-    TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
-    LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
-
-    CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
-    CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
-);
-
 
 CREATE TABLE LOTES_INVENTARIO (
     NUMERO_LOTE  NUMBER(6)   NOT NULL,
@@ -214,7 +213,7 @@ create table Det_Factura_Fis(
     num_factura number(6) not null,
     id_det_fact number(6) not null,
     NUMERO_LOTE  NUMBER(6)   NOT NULL,
-    ID_TIENDA    NUMBER(4)   NOT NULL,
+    -- ID_TIENDA    NUMBER(4)   NOT NULL, Duplicado en la llave foranea de arriba
     ID_JUGUETE   NUMBER(5)   NOT NULL,
     tipo_cliente varchar2(11) CONSTRAINT Det_Factura_Fis_tipo_cliente CHECK(tipo_cliente in ('NINNO', 'ADOLESCENTE', 'ADULTO')),
     constraint Det_Factura_Fis_id_Factura_Fisica FOREIGN KEY (id_tienda,num_factura) REFERENCES Factura_Fisica(id_tienda,num_factura),
@@ -227,8 +226,9 @@ create table Factura_online(
     f_emision timestamp not null,
     id_cliente number(4) not null,
     puntos_acum_venta number(3) not null,
-    gratis_lealtad boolean not null,
+    gratis_lealtad NUMBER(1) not null,
     total number(9,2),
+    CONSTRAINT CHK_GRATIS_LEALTAD CHECK (gratis_lealtad IN (0,1)),
     CONSTRAINT Factura_online_id_cliente foreign key (id_cliente) REFERENCES CLIENTES_LEGO(ID_CLIENTE)
 );
 
@@ -236,7 +236,7 @@ create table Det_Factura_Onl(
     num_factura number(4) not null,
     id_det_fact number(6) not null,
     id_pais number(4) not null,
-    id_juguete number(4) not null,
+    ID_JUGUETE NUMBER(5) not null,
     cantidad number(2),
     CONSTRAINT Det_Factura_Onl_num_factura foreign key (num_factura) REFERENCES Factura_online(num_factura),
     CONSTRAINT id_Det_Factura_Onl primary key (num_factura,id_det_fact),
