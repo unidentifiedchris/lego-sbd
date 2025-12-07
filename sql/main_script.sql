@@ -603,6 +603,108 @@ BEGIN
 END SP_GET_PARTICIPANT_BY_DOC;
 /
 
+-- 1. Función para calcular el total de una factura usando el historial de precios
+CREATE OR REPLACE FUNCTION CALCULAR_TOTAL_FACTURA_ONLINE (p_num_factura IN NUMBER)
+RETURN NUMBER
+IS
+    v_total_calculado NUMBER(9, 2);
+BEGIN
+    -- La consulta une los detalles de la factura (df) con la factura (fo)
+    -- y busca en el historial de precios (hp) el precio vigente en la fecha de emisión (fo.f_emision).
+    SELECT SUM(hp.precio * df.cantidad) INTO v_total_calculado
+    FROM
+        Det_Factura_Onl df JOIN Factura_online fo ON df.num_factura = fo.num_factura
+        JOIN HISTORICO_PRECIO hp ON df.id_juguete = hp.id_juguete
+    WHERE
+        df.num_factura = p_num_factura AND fo.f_emision >= hp.fecha_inicio
+        AND (
+            hp.fecha_fin IS NULL
+            OR fo.f_emision <= hp.fecha_fin
+        );
+
+    -- Devuelve el total calculado, usando NVL para devolver 0 si no se encontró
+    -- ningún detalle o precio (v_total_calculado es NULL).
+    RETURN NVL(v_total_calculado , 0);
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Manejar cualquier otro error de ejecución o SQL
+        -- Se recomienda no usar DBMS_OUTPUT en funciones destinadas a SQL.
+        RETURN NULL;
+END;
+/
+-- 2. Función para obtener el precio actual de un juguete
+CREATE OR REPLACE FUNCTION OBTENER_PRECIO_INDEFINIDO (p_id_juguete IN NUMBER)
+RETURN NUMBER
+IS
+    v_precio NUMBER(8,2);
+BEGIN
+    -- Busca el único registro de precio para el juguete que no tiene fecha de fin (precio actual).
+    SELECT PRECIO INTO v_precio
+    FROM HISTORICO_PRECIO
+    WHERE ID_JUGUETE = p_id_juguete AND FECHA_FIN IS NULL;
+    RETURN v_precio;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Si no hay un precio actual definido, devuelve NULL.
+        RETURN NULL;
+    WHEN OTHERS THEN
+        -- Re-lanza cualquier otro error inesperado.
+        RAISE;
+END;
+/
+CREATE OR REPLACE FUNCTION ES_CLIENTE_UE (p_id_cliente IN NUMBER)
+RETURN NUMBER -- Devolvemos NUMBER (1=TRUE, 0=FALSE) para compatibilidad con SQL
+IS
+    v_es_miembro_ue PAISES.UNION_EUROPEA%TYPE;
+BEGIN
+    -- 1. Buscar el estado de pertenencia a la UE del país del cliente
+    SELECT p.UNION_EUROPEA INTO v_es_miembro_ue
+    FROM CLIENTES_LEGO c
+    JOIN PAISES p ON c.RESIDENCIA = p.ID_PAIS
+    WHERE c.ID_CLIENTE = p_id_cliente;
+
+    -- La columna UNION_EUROPEA ya es 1 para TRUE y 0 para FALSE,
+    -- por lo que podemos devolverla directamente.
+    RETURN v_es_miembro_ue;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Si el cliente o su país no se encuentran, asumimos FALSE.
+        RETURN 0;
+    WHEN OTHERS THEN
+        -- Re-lanza cualquier otro error inesperado.
+        RAISE;
+END;
+/
+CREATE OR REPLACE FUNCTION CALCULAR_TOTAL_CON_IMPUESTOS (p_num_factura IN NUMBER)
+RETURN NUMBER
+IS
+    v_subtotal      NUMBER(9, 2);
+    v_es_ue         NUMBER(1);
+    v_total_final   NUMBER(9, 2);
+BEGIN
+    v_subtotal := CALCULAR_TOTAL_FACTURA_ONLINE (p_num_factura);
+    SELECT p.UNION_EUROPEA
+    INTO v_es_ue
+    FROM PAISES p
+    JOIN CLIENTES_LEGO c ON c.RESIDENCIA = p.ID_PAIS
+    JOIN Factura_online fo ON fo.ID_CLIENTE = c.ID_CLIENTE
+    WHERE fo.num_factura = p_num_factura;
+    IF v_es_ue = 1 THEN
+        v_total_final := v_subtotal * 1.05;
+    ELSE
+        v_total_final := v_subtotal * 1.15;
+    END IF;
+RETURN ROUND(v_total_final, 2); -- Redondeamos a 2 decimales
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Si no se encuentra la factura o el cliente
+        RETURN 0;
+    WHEN OTHERS THEN
+        -- Manejo de errores generales
+        RAISE_APPLICATION_ERROR(-20001, 'Error calculando total: ' || SQLERRM);
+END;
+/
+
 CREATE OR REPLACE PACKAGE pkg_lego_inserts_t AS
 
    PROCEDURE SP_INSERT_PAIS(p_nombre IN VARCHAR2, p_nacionalidad IN VARCHAR2, p_continente IN VARCHAR2, p_union_europea IN NUMBER, p_id_out OUT NUMBER);
