@@ -439,6 +439,17 @@ CREATE OR REPLACE TYPE t_participant_doc_obj AS OBJECT (
 CREATE OR REPLACE TYPE t_participant_doc_tab AS TABLE OF t_participant_doc_obj;
 /
 
+-- Define an object type to represent a single item in a sale
+CREATE OR REPLACE TYPE T_VENTA_ITEM_OBJ AS OBJECT (
+    id_juguete NUMBER,
+    cantidad   NUMBER
+);
+/
+
+-- Define a collection type (table of objects) to hold the shopping cart
+CREATE OR REPLACE TYPE T_VENTA_ITEM_TAB AS TABLE OF T_VENTA_ITEM_OBJ;
+/
+
 
 -- PROCEDURES, FUNCTONS AND PACKAGES
 
@@ -713,6 +724,236 @@ EXCEPTION
     WHEN OTHERS THEN
         -- Manejo de errores generales
         RAISE_APPLICATION_ERROR(-20001, 'Error calculando total: ' || SQLERRM);
+END;
+/
+
+
+-- Following procedure should be not used. Not deleted yet for reference.
+CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_CON_PUNTOS (p_id_cliente IN NUMBER,p_total_compra IN NUMBER) 
+IS
+    v_puntos_anteriores NUMBER := 0;
+    v_puntos_nuevos     NUMBER := 0;
+    v_puntos_totales    NUMBER := 0;
+    v_es_gratis         NUMBER(1) := 0;
+    v_nuevo_id_factura  FACTURA_ONLINE.NUM_FACTURA%TYPE;
+BEGIN
+    -- Get the next invoice number
+    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
+    INTO v_nuevo_id_factura
+    FROM FACTURA_ONLINE;
+
+    -- Get the last accumulated points for the client
+    BEGIN
+        SELECT PUNTOS_ACUM_VENTA
+        INTO v_puntos_anteriores
+        FROM FACTURA_ONLINE
+        WHERE ID_CLIENTE = p_id_cliente
+        ORDER BY F_EMISION DESC
+        FETCH FIRST 1 ROWS ONLY;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_puntos_anteriores := 0;
+    END;
+    -- Business Rule: Award 1 point for every 10 currency units spent.
+    -- This keeps it consistent with the idea that points are earned, not just a 1:1 copy of the total.
+    v_puntos_nuevos := FLOOR(p_total_compra);
+
+    v_puntos_totales := v_puntos_anteriores + v_puntos_nuevos;
+    IF v_puntos_totales >= 500 THEN
+        v_es_gratis := 1;           -- Activar "Gratis Lealtad"
+        v_puntos_totales := 0;      -- Reiniciar puntos (se consumen por el premio)
+                                    -- NOTA: Si prefieres que conserven el sobrante (ej. 520 -> quedan 20),
+                                    -- cambia la linea anterior por: v_puntos_totales := v_puntos_totales - 500;
+    ELSE
+        -- Caso: No llega a 500
+        v_es_gratis := 0;           -- No hay premio gratis
+        -- v_puntos_totales se queda con la suma (Acumulado + Nuevo)
+    END IF;
+    INSERT INTO FACTURA_ONLINE (
+        NUM_FACTURA,
+        F_EMISION,
+        ID_CLIENTE,
+        PUNTOS_ACUM_VENTA,
+        GRATIS_LEALTAD,
+        TOTAL
+    ) VALUES (
+        v_nuevo_id_factura,
+        SYSTIMESTAMP,
+        p_id_cliente,
+        v_puntos_totales,
+        v_es_gratis,
+        p_total_compra
+    );
+    COMMIT; -- Guardar cambios
+    DBMS_OUTPUT.PUT_LINE('Factura #' || v_nuevo_id_factura || ' registrada con éxito.');
+    IF v_es_gratis = 1 THEN
+        DBMS_OUTPUT.PUT_LINE('¡Felicidades! Cliente obtuvo recompensa por lealtad.');
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20001, 'Error al procesar la venta: ' || SQLERRM);
+END;
+/
+
+CREATE OR REPLACE FUNCTION FN_CALCULAR_PUNTOS_JUGUETE ( p_id_juguete IN NUMBER, p_cantidad   IN NUMBER)
+RETURN NUMBER 
+IS
+    v_rango_precio CHAR(1);
+    v_puntos_base  NUMBER := 0;
+BEGIN
+    -- 1. Buscamos el rango de precio del juguete (A, B, C o D)
+    SELECT RANGO_PRECIO 
+    INTO v_rango_precio
+    FROM JUGUETES 
+    WHERE ID_JUGUETE = p_id_juguete;
+
+    -- 2. Asignamos puntos según tu regla
+    CASE v_rango_precio
+        WHEN 'A' THEN v_puntos_base := 5;
+        WHEN 'B' THEN v_puntos_base := 20;
+        WHEN 'C' THEN v_puntos_base := 50;
+        WHEN 'D' THEN v_puntos_base := 200;
+        ELSE v_puntos_base := 0; -- Por seguridad
+    END CASE;
+
+    -- 3. Retornamos puntos * cantidad
+    RETURN v_puntos_base * p_cantidad;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN 0; -- Si el juguete no existe, devuelve 0 puntos
+END;
+/
+CREATE OR REPLACE FUNCTION FN_CALCULAR_SUBTOTAL_CARRITO (p_items IN T_VENTA_ITEM_TAB)
+RETURN NUMBER
+IS
+    v_subtotal NUMBER := 0;
+    v_precio_item NUMBER;
+BEGIN
+    FOR i IN 1 .. p_items.COUNT LOOP
+        v_precio_item := OBTENER_PRECIO_INDEFINIDO(p_items(i).id_juguete);
+        IF v_precio_item IS NOT NULL THEN
+            v_subtotal := v_subtotal + (v_precio_item * p_items(i).cantidad);
+        END IF;
+    END LOOP;
+    RETURN v_subtotal;
+END;
+/
+CREATE OR REPLACE FUNCTION FN_CALCULAR_IMPUESTOS (p_subtotal IN NUMBER, p_id_cliente IN NUMBER)
+RETURN NUMBER
+IS
+    v_es_ue NUMBER;
+    v_tasa_impuesto NUMBER;
+BEGIN
+    v_es_ue := ES_CLIENTE_UE(p_id_cliente);
+    IF v_es_ue = 1 THEN
+        v_tasa_impuesto := 0.05; -- 5% for EU clients
+    ELSE
+        v_tasa_impuesto := 0.15; -- 15% for non-EU clients
+    END IF;
+    RETURN p_subtotal * v_tasa_impuesto;
+END;
+/
+CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO (
+    p_id_cliente IN NUMBER,
+    p_items      IN T_VENTA_ITEM_TAB -- Array of sale item objects
+) IS
+    v_puntos_anteriores NUMBER := 0;
+    v_puntos_nuevos     NUMBER := 0;
+    v_puntos_totales    NUMBER := 0;
+    v_es_gratis         NUMBER(1) := 0;
+    v_nuevo_id_factura  FACTURA_ONLINE.NUM_FACTURA%TYPE;
+    v_id_pais           CATALOGO_PAIS.ID_PAIS%TYPE;
+    v_subtotal_dinero   NUMBER;
+    v_impuestos_dinero  NUMBER;
+    v_total_final_dinero NUMBER;
+
+    -- Local collection to hold detail records before bulk inserting
+    TYPE t_det_factura_tab IS TABLE OF DET_FACTURA_ONL%ROWTYPE;
+    v_detalles_factura  t_det_factura_tab := t_det_factura_tab();
+
+BEGIN
+    -- A. Obtener el siguiente número de factura
+    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
+    INTO v_nuevo_id_factura
+    FROM FACTURA_ONLINE;
+
+    -- B. Obtener los puntos anteriores del cliente
+    BEGIN
+        SELECT PUNTOS_ACUM_VENTA INTO v_puntos_anteriores
+        FROM FACTURA_ONLINE
+        WHERE ID_CLIENTE = p_id_cliente -- Corrected: Column name first
+        ORDER BY F_EMISION DESC
+        FETCH FIRST 1 ROWS ONLY;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_puntos_anteriores := 0; -- Cliente nuevo
+    END;
+
+    -- C. Calcular el subtotal y los impuestos de la compra
+    v_subtotal_dinero := FN_CALCULAR_SUBTOTAL_CARRITO(p_items);
+    v_impuestos_dinero := FN_CALCULAR_IMPUESTOS(v_subtotal_dinero, p_id_cliente);
+
+    -- C. Calcular los puntos NUEVOS para todos los items en la compra
+    v_puntos_nuevos := 0; -- Initialize to zero
+    FOR i IN 1 .. p_items.COUNT LOOP
+        v_puntos_nuevos := v_puntos_nuevos + FN_CALCULAR_PUNTOS_JUGUETE(
+            p_id_juguete => p_items(i).id_juguete,
+            p_cantidad   => p_items(i).cantidad
+        );
+    END LOOP;
+    
+    -- D. Sumar acumulado + nuevos
+    v_puntos_totales := v_puntos_anteriores + v_puntos_nuevos;
+
+    -- E. LOGICA PRINCIPAL: Chequeo de los 500 Puntos
+    IF v_puntos_totales >= 500 THEN
+        v_es_gratis := 1;          -- Se activa el premio
+        v_puntos_totales := 0;     -- Se reinician los puntos (se gastan)
+        -- El total a pagar es solo el impuesto
+        v_total_final_dinero := v_impuestos_dinero;
+    ELSE
+        v_es_gratis := 0;          -- No hay premio
+        -- v_puntos_totales se mantiene acumulando
+        -- El total a pagar es subtotal + impuestos
+        v_total_final_dinero := v_subtotal_dinero + v_impuestos_dinero;
+    END IF;
+
+    -- F. Insertar la Factura (Cabecera)
+    INSERT INTO FACTURA_ONLINE (
+        NUM_FACTURA, F_EMISION, ID_CLIENTE, PUNTOS_ACUM_VENTA, GRATIS_LEALTAD, TOTAL
+    ) VALUES (
+        v_nuevo_id_factura, SYSTIMESTAMP, p_id_cliente, v_puntos_totales, v_es_gratis, ROUND(v_total_final_dinero, 2)
+    );
+
+    -- G. Insertar el Detalle de la Factura
+    -- Obtenemos el país de residencia del cliente para asociarlo al catálogo
+    SELECT RESIDENCIA INTO v_id_pais FROM CLIENTES_LEGO WHERE ID_CLIENTE = p_id_cliente;
+
+    -- Prepare the detail records for bulk insertion
+    FOR i IN 1 .. p_items.COUNT LOOP
+        v_detalles_factura.EXTEND;
+        v_detalles_factura(i).NUM_FACTURA := v_nuevo_id_factura;
+        v_detalles_factura(i).ID_DET_FACT := i; -- Use loop index as detail ID
+        v_detalles_factura(i).ID_PAIS     := v_id_pais;
+        v_detalles_factura(i).ID_JUGUETE  := p_items(i).id_juguete;
+        v_detalles_factura(i).CANTIDAD    := p_items(i).cantidad;
+    END LOOP;
+
+    -- Use FORALL for efficient bulk insertion of all detail lines
+    FORALL i IN 1 .. v_detalles_factura.COUNT
+        INSERT INTO DET_FACTURA_ONL VALUES v_detalles_factura(i);
+
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Venta registrada con ' || p_items.COUNT || ' item(s). Puntos ganados hoy: ' || v_puntos_nuevos);
+    IF v_es_gratis = 1 THEN
+        DBMS_OUTPUT.PUT_LINE('*** ¡CLIENTE ALCANZÓ 500 PUNTOS! PREMIO DISPONIBLE ***');
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20002, 'Error al registrar venta LEGO: ' || SQLERRM);
 END;
 /
 
