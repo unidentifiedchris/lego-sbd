@@ -1,3 +1,6 @@
+SET ECHO ON;
+SET SERVEROUTPUT ON;
+SET DEFINE OFF;
 -- 1) PAIS
 CREATE TABLE PAISES (
     ID_PAIS NUMBER(4) PRIMARY KEY,
@@ -133,7 +136,6 @@ CREATE TABLE TEMAS (
     DESCRIPCION_TEMA  VARCHAR2(200)  NOT NULL,
     TIPO_TEMA         VARCHAR2(10)   NOT NULL,      -- 'TEMA' o 'SERIE'
     LICENCIA_EXTERNA  NUMBER(1),                   -- 1 = si, 0 = no
-
     CONSTRAINT CHK_TEMA_TIPO CHECK (TIPO_TEMA IN ('TEMA','SERIE')),
     CONSTRAINT CHK_TEMA_LIC_EXTERNA CHECK (LICENCIA_EXTERNA IN (0,1))
 );
@@ -199,7 +201,7 @@ CREATE TABLE HISTORICO_PRECIO (
 
 create table Factura_Fisica(
     id_tienda number(4) not null,
-    num_factura number(6) not null,
+    num_factura number(6) not null UNIQUE,
     id_cliente number(4) not null,
     fecha_emision timestamp not null,
     total number(9,2),
@@ -421,9 +423,8 @@ CREATE SEQUENCE S_TEMAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_JUGUETES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_LOTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DESCUENTOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
-CREATE SEQUENCE S_FACTURA_FISICA START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_FACTURAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_FIS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
-CREATE SEQUENCE S_FACTURA_ONLINE START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_ONL START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
 
@@ -876,10 +877,8 @@ CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_ONLINE (
     v_detalles_factura  t_det_factura_tab := t_det_factura_tab();
 
 BEGIN
-    -- A. Obtener el siguiente número de factura
-    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
-    INTO v_nuevo_id_factura
-    FROM FACTURA_ONLINE;
+
+    v_nuevo_id_factura := S_FACTURAS.NEXTVAL;
 
     -- B. Obtener los puntos anteriores del cliente
     BEGIN
@@ -975,10 +974,7 @@ CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_FISICA (
 
 BEGIN
     -- A. Obtener el siguiente número de factura para la tienda
-    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
-    INTO v_nuevo_id_factura
-    FROM FACTURA_FISICA
-    WHERE ID_TIENDA = p_id_tienda;
+    v_nuevo_id_factura := S_FACTURAS.NEXTVAL;
 
     -- B. Iterar sobre cada juguete comprado para validar stock y preparar inserción
     FOR i IN 1 .. p_ids_juguete.COUNT LOOP
@@ -1049,6 +1045,56 @@ EXCEPTION
     WHEN OTHERS THEN
         ROLLBACK;
         RAISE_APPLICATION_ERROR(-20010, 'Error al registrar venta física: ' || SQLERRM);
+END;
+/
+
+CREATE OR REPLACE PROCEDURE SP_GENERAR_DESCUENTOS_DIARIOS(
+    p_fecha IN DATE DEFAULT SYSDATE
+) IS
+BEGIN
+    INSERT INTO DESCUENTOS_INVENTARIO (
+        ID_DESCUENTO,
+        ID_PAIS,
+        ID_JUGUETE,
+        FECHA,
+        CANTIDAD
+    )
+    SELECT
+        S_DESCUENTOS.NEXTVAL,
+        vista_agrupada.ID_PAIS,
+        vista_agrupada.ID_JUGUETE,
+        TRUNC(p_fecha),
+        vista_agrupada.TOTAL_VENDIDO
+    FROM (
+        -- Subconsulta para agrupar sin invocar la secuencia aún
+        SELECT
+            t.ID_PAIS,
+            df.ID_JUGUETE,
+            COUNT(*) AS TOTAL_VENDIDO
+        FROM
+            FACTURA_FISICA ff
+        JOIN
+            DET_FACTURA_FIS df 
+            ON ff.ID_TIENDA = df.ID_TIENDA 
+            AND ff.NUM_FACTURA = df.NUM_FACTURA
+        JOIN
+            TIENDAS t 
+            ON ff.ID_TIENDA = t.ID_TIENDA
+        WHERE
+            TRUNC(ff.FECHA_EMISION) = TRUNC(p_fecha)
+        GROUP BY
+            t.ID_PAIS,
+            df.ID_JUGUETE
+    ) vista_agrupada;
+
+    COMMIT;
+    
+    DBMS_OUTPUT.PUT_LINE('Descuentos generados exitosamente para el día ' || TO_CHAR(p_fecha, 'YYYY-MM-DD'));
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20110, 'Error en SP_GENERAR_DESCUENTOS_DIARIOS: ' || SQLERRM);
 END;
 /
 
@@ -1815,6 +1861,117 @@ FROM CATALOGO_PAIS CP
 JOIN JUGUETES J ON CP.ID_JUGUETE = J.ID_JUGUETE
 WHERE CP.ID_PAIS = 6  -- Corea del Sur tiene ID 6
 ORDER BY J.NOMBRE_JUGUETE;
+
+CREATE OR REPLACE VIEW V_FACTURA_FISICA_DETALLE_REF AS
+SELECT
+    t.NOMBRE AS "Tienda",
+    ff.num_factura AS "Numero de Factura",
+    c.p_nombre || ' ' || c.p_apellido AS "Nombre del Cliente",
+    c.num_doc AS "Documento de Identidad",
+    TO_CHAR(ff.fecha_emision, 'YYYY-MM-DD HH24:MI:SS') AS "Fecha de Emision",
+    CASE
+        -- El País de Residencia del Cliente (c.RESIDENCIA) apunta a PAISES (p.ID_PAIS).
+        WHEN p.UNION_EUROPEA = 1 THEN
+            ff.total
+        -- Uso de la función con el total si no es de la UE.
+        ELSE
+            FN_CALCULATE_CONVERSION(ff.total, 'D')
+    END AS "Total"
+FROM
+    Factura_Fisica ff,
+    TIENDAS t,
+    CLIENTES_LEGO c,
+    PAISES p
+WHERE
+    -- Relación: Factura_Fisica (ID_TIENDA) -> TIENDAS (ID_TIENDA)
+    ff.id_tienda = t.ID_TIENDA AND
+    -- Relación: Factura_Fisica (ID_CLIENTE) -> CLIENTES_LEGO (ID_CLIENTE)
+    ff.id_cliente = c.ID_CLIENTE AND
+    -- Relación: CLIENTES_LEGO (RESIDENCIA) -> PAISES (ID_PAIS)
+    c.RESIDENCIA = p.ID_PAIS;
+
+CREATE OR REPLACE VIEW V_FACTURA_ONLINE_DETALLE_REF AS
+SELECT
+    'Online' AS "Canal de Venta",
+    fo.num_factura AS "Numero de Factura",
+    c.p_nombre || ' ' || c.p_apellido AS "Nombre del Cliente",
+    c.num_doc AS "Documento de Identidad",
+    TO_CHAR(fo.f_emision, 'YYYY-MM-DD HH24:MI:SS') AS "Fecha de Emision",
+    CASE
+        -- Se une a PAISES a través de la residencia del cliente.
+        WHEN p.UNION_EUROPEA = 1 THEN
+            fo.total
+        -- Si no es miembro de la UE (UNION_EUROPEA = 0), convierte el total a Dólares.
+        ELSE
+            FN_CALCULATE_CONVERSION(fo.total, 'D')
+    END AS "Total"
+FROM
+    Factura_Online fo,
+    CLIENTES_LEGO c,
+    PAISES p
+WHERE
+    -- Relación: Factura_Online (ID_CLIENTE) -> CLIENTES_LEGO (ID_CLIENTE)
+    fo.id_cliente = c.ID_CLIENTE AND
+    -- Relación: CLIENTES_LEGO (RESIDENCIA) -> PAISES (ID_PAIS)
+    c.RESIDENCIA = p.ID_PAIS;
+
+CREATE OR REPLACE VIEW V_DETALLE_FACTURA_FISICA_REF AS
+SELECT
+    ff.num_factura AS "Numero de Factura",
+    TO_CHAR(ff.fecha_emision, 'YYYY-MM-DD HH24:MI:SS') AS "Fecha de Emision",
+    j.nombre_juguete AS "Juguete",
+    hp.precio AS "Subtotal"
+FROM
+    Factura_Fisica ff,
+    Det_Factura_Fis dff,
+    JUGUETES j,
+    HISTORICO_PRECIO hp
+WHERE
+    -- 1. Factura_Fisica a Det_Factura_Fis
+    ff.id_tienda = dff.id_tienda 
+    AND ff.num_factura = dff.num_factura
+    -- 2. Det_Factura_Fis a JUGUETES
+    AND dff.id_juguete = j.ID_JUGUETE
+    -- 3. JUGUETES/Det_Factura_Fis a HISTORICO_PRECIO (por juguete)
+    AND dff.id_juguete = hp.ID_JUGUETE
+    -- 4. Condición clave para el rango de precio histórico
+    AND ff.fecha_emision >= hp.FECHA_INICIO
+    AND (
+        hp.FECHA_FIN IS NULL 
+        OR ff.fecha_emision <= hp.FECHA_FIN
+    )
+ORDER BY
+    ff.num_factura, dff.id_det_fact;
+
+CREATE OR REPLACE VIEW V_DETALLE_FACTURA_ONLINE_REF AS
+SELECT
+    fo.num_factura AS "Numero de Factura",
+    TO_CHAR(fo.f_emision, 'YYYY-MM-DD HH24:MI:SS') AS "Fecha de Emision",
+    j.nombre_juguete AS "Juguete",
+    dfo.cantidad AS "Cantidad", -- Nueva columna solicitada
+    hp.precio AS "Subtotal Unitario"
+FROM
+    Factura_online fo,
+    Det_Factura_Onl dfo,
+    JUGUETES j,
+    HISTORICO_PRECIO hp
+WHERE
+    -- 1. Factura_Online a Det_Factura_Onl
+    fo.num_factura = dfo.num_factura
+    -- 2. Det_Factura_Onl a JUGUETES (por el ID del juguete)
+    AND dfo.id_juguete = j.ID_JUGUETE
+    -- 3. JUGUETES/Det_Factura_Onl a HISTORICO_PRECIO (por juguete)
+    AND dfo.id_juguete = hp.ID_JUGUETE
+    -- 4. Condición clave para el rango de precio histórico
+    -- La fecha de emisión de la factura debe ser mayor o igual a la fecha de inicio del precio
+    AND fo.f_emision >= hp.FECHA_INICIO
+    AND (
+        -- Y la fecha de emisión debe ser menor o igual a la fecha de fin del precio (si existe)
+        hp.FECHA_FIN IS NULL 
+        OR fo.f_emision <= hp.FECHA_FIN
+    )
+ORDER BY
+    fo.num_factura, dfo.id_det_fact;
 
 -- INSERTS FOR TEST DATA
 DECLARE
