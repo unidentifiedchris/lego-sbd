@@ -429,12 +429,14 @@ CREATE SEQUENCE S_DET_FACTURA_ONL START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
 -- TYPES
 
+CREATE OR REPLACE TYPE T_NUMBER_ARRAY AS TABLE OF NUMBER;
+/
+
 CREATE OR REPLACE TYPE t_participant_doc_obj AS OBJECT (
     is_menor NUMBER(1),      -- 1 for FANS_MENOR_LEGO, 0 for CLIENTES_LEGO
     num_doc  VARCHAR2(50)    -- Document number to identify the person
 );
 /
-
 
 CREATE OR REPLACE TYPE t_participant_doc_tab AS TABLE OF t_participant_doc_obj;
 /
@@ -451,7 +453,7 @@ CREATE OR REPLACE TYPE T_VENTA_ITEM_TAB AS TABLE OF T_VENTA_ITEM_OBJ;
 /
 
 
--- PROCEDURES, FUNCTONS AND PACKAGES
+-- PROCEDURES, FUNCTIONS AND PACKAGES
 
 CREATE OR REPLACE FUNCTION FN_CALCULATE_CONVERSION(
     p_value IN NUMBER,
@@ -855,7 +857,7 @@ BEGIN
     RETURN p_subtotal * v_tasa_impuesto;
 END;
 /
-CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO (
+CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_ONLINE (
     p_id_cliente IN NUMBER,
     p_items      IN T_VENTA_ITEM_TAB -- Array of sale item objects
 ) IS
@@ -954,6 +956,99 @@ EXCEPTION
     WHEN OTHERS THEN
         ROLLBACK;
         RAISE_APPLICATION_ERROR(-20002, 'Error al registrar venta LEGO: ' || SQLERRM);
+END;
+/
+
+CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_FISICA (
+    p_id_cliente IN NUMBER,
+    p_id_tienda  IN NUMBER,
+    p_ids_juguete IN T_NUMBER_ARRAY -- An array of toy IDs, one entry per item being bought
+) IS
+    v_nuevo_id_factura FACTURA_FISICA.NUM_FACTURA%TYPE;
+    v_total_dinero     NUMBER := 0;
+    v_precio_item      NUMBER;
+    v_lote_usado       LOTES_INVENTARIO.NUMERO_LOTE%TYPE;
+
+    -- Type to store which lot was used for each item, to update inventory later
+    TYPE t_lote_utilizado_tab IS TABLE OF LOTES_INVENTARIO%ROWTYPE;
+    v_lotes_a_actualizar t_lote_utilizado_tab := t_lote_utilizado_tab();
+
+BEGIN
+    -- A. Obtener el siguiente número de factura para la tienda
+    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
+    INTO v_nuevo_id_factura
+    FROM FACTURA_FISICA
+    WHERE ID_TIENDA = p_id_tienda;
+
+    -- B. Iterar sobre cada juguete comprado para validar stock y preparar inserción
+    FOR i IN 1 .. p_ids_juguete.COUNT LOOP
+        -- B.1. Encontrar un lote con stock para este juguete en esta tienda
+        BEGIN
+            SELECT NUMERO_LOTE
+            INTO v_lote_usado
+            FROM LOTES_INVENTARIO
+            WHERE ID_TIENDA = p_id_tienda
+              AND ID_JUGUETE = p_ids_juguete(i)
+              AND CANTIDAD > 0
+            FETCH FIRST 1 ROWS ONLY;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20011, 'No hay stock disponible para el juguete ID ' || p_ids_juguete(i) || ' en la tienda ' || p_id_tienda);
+        END;
+
+        -- B.2. Obtener el precio actual del juguete y sumarlo al total
+        v_precio_item := OBTENER_PRECIO_INDEFINIDO(p_ids_juguete(i));
+        IF v_precio_item IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20012, 'No se encontró precio para el juguete ID ' || p_ids_juguete(i));
+        END IF;
+        v_total_dinero := v_total_dinero + v_precio_item;
+
+        -- B.3. Guardar el lote y juguete para la inserción en DET_FACTURA_FIS
+        v_lotes_a_actualizar.EXTEND;
+        v_lotes_a_actualizar(i).NUMERO_LOTE := v_lote_usado;
+        v_lotes_a_actualizar(i).ID_JUGUETE  := p_ids_juguete(i);
+        v_lotes_a_actualizar(i).ID_TIENDA   := p_id_tienda;
+
+    END LOOP;
+
+    -- C. Insertar la Factura (Cabecera)
+    INSERT INTO FACTURA_FISICA (
+        ID_TIENDA, NUM_FACTURA, ID_CLIENTE, FECHA_EMISION, TOTAL
+    ) VALUES (
+        p_id_tienda, v_nuevo_id_factura, p_id_cliente, SYSTIMESTAMP, ROUND(v_total_dinero, 2)
+    );
+
+    -- D. Insertar el Detalle de la Factura (un registro por cada item)
+    FOR i IN 1 .. v_lotes_a_actualizar.COUNT LOOP
+        INSERT INTO DET_FACTURA_FIS (
+            ID_TIENDA, NUM_FACTURA, ID_DET_FACT, NUMERO_LOTE, ID_JUGUETE
+        ) VALUES (
+            p_id_tienda,
+            v_nuevo_id_factura,
+            i, -- Usamos el índice del bucle como ID de detalle
+            v_lotes_a_actualizar(i).NUMERO_LOTE,
+            v_lotes_a_actualizar(i).ID_JUGUETE
+        );
+    END LOOP;
+
+    -- E. Actualizar el inventario para cada lote utilizado
+    -- This logic assumes one item is taken from a lot. If a lot is depleted,
+    -- the next sale will automatically pick the next available lot.
+    -- FOR i IN 1 .. v_lotes_a_actualizar.COUNT LOOP
+    --     UPDATE LOTES_INVENTARIO
+    --     SET CANTIDAD = CANTIDAD - 1
+    --     WHERE ID_TIENDA = v_lotes_a_actualizar(i).ID_TIENDA
+    --       AND NUMERO_LOTE = v_lotes_a_actualizar(i).NUMERO_LOTE
+    --       AND ID_JUGUETE = v_lotes_a_actualizar(i).ID_JUGUETE;
+    -- END LOOP;
+
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Venta física registrada en tienda ' || p_id_tienda || '. Factura #' || v_nuevo_id_factura || '. Total: ' || v_total_dinero);
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20010, 'Error al registrar venta física: ' || SQLERRM);
 END;
 /
 
