@@ -174,17 +174,19 @@ CREATE TABLE LOTES_INVENTARIO (
         CONSTRAINT CHK_LOTE_CANTIDAD CHECK (CANTIDAD >= 0),
     CONSTRAINT FK_LOTE_TIENDA FOREIGN KEY (ID_TIENDA) REFERENCES TIENDAS (ID_TIENDA),
     CONSTRAINT FK_LOTE_JUGUETE FOREIGN KEY (ID_JUGUETE) REFERENCES JUGUETES (ID_JUGUETE),
-    CONSTRAINT PK_LOTES_INVENTARIO PRIMARY KEY (NUMERO_LOTE,ID_TIENDA,ID_JUGUETE)
+    CONSTRAINT PK_LOTES_INVENTARIO PRIMARY KEY (ID_TIENDA,ID_JUGUETE,NUMERO_LOTE)
 );
 
 CREATE TABLE DESCUENTOS_INVENTARIO (
-    ID_DESCUENTO  NUMBER(6)  PRIMARY KEY,
-    ID_PAIS       NUMBER(4)  NOT NULL,
+    ID_TIENDA       NUMBER(4)  NOT NULL,
     ID_JUGUETE    NUMBER(5)  NOT NULL,
+    NUMERO_LOTE number(6) not null,
+    ID_DESCUENTO  NUMBER(6)  NOT NULL,
     FECHA         DATE       NOT NULL,
     CANTIDAD      NUMBER(6)  NOT NULL
         CONSTRAINT CHK_DESC_INV_CANTIDAD CHECK (CANTIDAD > 0),
-    CONSTRAINT FK_DESC_INV_CATALOGO FOREIGN KEY (ID_PAIS, ID_JUGUETE) REFERENCES CATALOGO_PAIS (ID_PAIS, ID_JUGUETE)
+    CONSTRAINT FK_DESC_INV FOREIGN KEY (ID_TIENDA, ID_JUGUETE, NUMERO_LOTE) REFERENCES LOTES_INVENTARIO (ID_TIENDA,ID_JUGUETE, NUMERO_LOTE),
+    CONSTRAINT PK_DESC_INV PRIMARY KEY (ID_TIENDA,ID_JUGUETE,NUMERO_LOTE,ID_DESCUENTO)
 );
 
 CREATE TABLE HISTORICO_PRECIO (
@@ -1048,43 +1050,92 @@ EXCEPTION
 END;
 /
 
+CREATE OR REPLACE FUNCTION FN_CALCULAR_STOCK_NETO (
+    p_id_tienda IN NUMBER,
+    p_id_juguete IN NUMBER
+)
+RETURN NUMBER
+IS
+    v_total_en_lotes NUMBER(6) := 0;
+    v_total_descontado NUMBER(6) := 0;
+    v_stock_neto NUMBER(6);
+BEGIN
+    -- 1. Sumar la cantidad total del juguete en todos los LOTES (NUMERO_LOTE) de la tienda.
+    SELECT NVL(SUM(CANTIDAD), 0)
+    INTO v_total_en_lotes
+    FROM LOTES_INVENTARIO
+    WHERE ID_TIENDA = p_id_tienda
+      AND ID_JUGUETE = p_id_juguete;
+
+    -- Si no hay stock en lotes, retornamos 0 inmediatamente.
+    IF v_total_en_lotes = 0 THEN
+        RETURN 0;
+    END IF;
+
+    -- 2. Sumar la cantidad total registrada en DESCUENTOS_INVENTARIO 
+    --    para ese juguete y tienda.
+    --    (Esta suma agrupa todos los descuentos de TODOS los lotes de ese juguete en esa tienda)
+    SELECT NVL(SUM(CANTIDAD), 0)
+    INTO v_total_descontado
+    FROM DESCUENTOS_INVENTARIO
+    WHERE ID_TIENDA = p_id_tienda
+      AND ID_JUGUETE = p_id_juguete;
+    
+    -- 3. Calcular el stock neto (Lotes - Descuentos)
+    v_stock_neto := v_total_en_lotes - v_total_descontado;
+
+    -- 4. Devolver el resultado, asegurando que el stock neto nunca sea negativo.
+    RETURN CASE 
+               WHEN v_stock_neto < 0 THEN 0 
+               ELSE v_stock_neto 
+           END;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Manejo de otros errores generales.
+        RAISE_APPLICATION_ERROR(-20040, 'Error al calcular el stock neto: ' || SQLERRM);
+END FN_CALCULAR_STOCK_NETO;
+/
+
 CREATE OR REPLACE PROCEDURE SP_GENERAR_DESCUENTOS_DIARIOS(
     p_fecha IN DATE DEFAULT SYSDATE
 ) IS
 BEGIN
+    -- 1. Se insertan más columnas para cumplir con la nueva estructura de DESCUENTOS_INVENTARIO.
     INSERT INTO DESCUENTOS_INVENTARIO (
-        ID_DESCUENTO,
-        ID_PAIS,
+        ID_TIENDA,       -- NUEVA COLUMNA REQUERIDA
         ID_JUGUETE,
+        NUMERO_LOTE,     -- NUEVA COLUMNA REQUERIDA
+        ID_DESCUENTO,
         FECHA,
         CANTIDAD
     )
     SELECT
-        S_DESCUENTOS.NEXTVAL,
-        vista_agrupada.ID_PAIS,
+        vista_agrupada.ID_TIENDA,   -- Se selecciona ID_TIENDA
         vista_agrupada.ID_JUGUETE,
+        vista_agrupada.NUMERO_LOTE, -- Se selecciona NUMERO_LOTE
+        S_DESCUENTOS.NEXTVAL,
         TRUNC(p_fecha),
         vista_agrupada.TOTAL_VENDIDO
     FROM (
-        -- Subconsulta para agrupar sin invocar la secuencia aún
+        -- Subconsulta: Agrupa las ventas físicas por la combinación (TIENDA, JUGUETE, LOTE)
         SELECT
-            t.ID_PAIS,
-            df.ID_JUGUETE,
+            dff.ID_TIENDA,
+            dff.ID_JUGUETE,
+            dff.NUMERO_LOTE,
             COUNT(*) AS TOTAL_VENDIDO
         FROM
             FACTURA_FISICA ff
         JOIN
-            DET_FACTURA_FIS df 
-            ON ff.ID_TIENDA = df.ID_TIENDA 
-            AND ff.NUM_FACTURA = df.NUM_FACTURA
-        JOIN
-            TIENDAS t 
-            ON ff.ID_TIENDA = t.ID_TIENDA
+            DET_FACTURA_FIS dff 
+            ON ff.ID_TIENDA = dff.ID_TIENDA 
+            AND ff.NUM_FACTURA = dff.NUM_FACTURA
         WHERE
             TRUNC(ff.FECHA_EMISION) = TRUNC(p_fecha)
         GROUP BY
-            t.ID_PAIS,
-            df.ID_JUGUETE
+            dff.ID_TIENDA,
+            dff.ID_JUGUETE,
+            dff.NUMERO_LOTE
     ) vista_agrupada;
 
     COMMIT;
@@ -1095,7 +1146,7 @@ EXCEPTION
     WHEN OTHERS THEN
         ROLLBACK;
         RAISE_APPLICATION_ERROR(-20110, 'Error en SP_GENERAR_DESCUENTOS_DIARIOS: ' || SQLERRM);
-END;
+END SP_GENERAR_DESCUENTOS_DIARIOS;
 /
 
 CREATE OR REPLACE PACKAGE pkg_lego_inserts_t AS
