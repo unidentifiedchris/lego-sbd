@@ -802,10 +802,35 @@ CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_ONLINE (
     v_detalles_factura  t_det_factura_tab := t_det_factura_tab();
 
 BEGIN
+    -- A. Obtener el país de residencia del cliente para las validaciones
+    BEGIN
+        SELECT RESIDENCIA INTO v_id_pais FROM CLIENTES_LEGO WHERE ID_CLIENTE = p_id_cliente;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20004, 'El cliente con ID ' || p_id_cliente || ' no existe.');
+    END;
+
+    -- B. Validar que la cantidad de cada juguete no exceda el límite de compra del país
+    FOR i IN 1 .. p_items.COUNT LOOP
+        DECLARE
+            v_limite_compra CATALOGO_PAIS.LIMITE_COMPRA%TYPE;
+        BEGIN
+            SELECT LIMITE_COMPRA INTO v_limite_compra
+            FROM CATALOGO_PAIS
+            WHERE ID_PAIS = v_id_pais AND ID_JUGUETE = p_items(i).id_juguete;
+
+            IF p_items(i).cantidad > v_limite_compra THEN
+                RAISE_APPLICATION_ERROR(-20005, 'La cantidad del juguete ID ' || p_items(i).id_juguete || ' (' || p_items(i).cantidad || ') excede el límite de compra (' || v_limite_compra || ') para el país.');
+            END IF;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20006, 'El juguete ID ' || p_items(i).id_juguete || ' no está disponible en el catálogo del país.');
+        END;
+    END LOOP;
 
     v_nuevo_id_factura := S_FACTURAS.NEXTVAL;
 
-    -- B. Obtener los puntos anteriores del cliente
+    -- C. Obtener los puntos anteriores del cliente
     BEGIN
         SELECT PUNTOS_ACUM_VENTA INTO v_puntos_anteriores
         FROM FACTURA_ONLINE
@@ -817,11 +842,11 @@ BEGIN
             v_puntos_anteriores := 0; -- Cliente nuevo
     END;
 
-    -- C. Calcular el subtotal y los impuestos de la compra
+    -- D. Calcular el subtotal y los impuestos de la compra
     v_subtotal_dinero := FN_CALCULAR_SUBTOTAL_CARRITO(p_items);
     v_impuestos_dinero := FN_CALCULAR_IMPUESTOS(v_subtotal_dinero, p_id_cliente);
 
-    -- C. Calcular los puntos NUEVOS para todos los items en la compra
+    -- E. Calcular los puntos NUEVOS para todos los items en la compra
     v_puntos_nuevos := 0; -- Initialize to zero
     FOR i IN 1 .. p_items.COUNT LOOP
         v_puntos_nuevos := v_puntos_nuevos + FN_CALCULAR_PUNTOS_JUGUETE(
@@ -830,10 +855,10 @@ BEGIN
         );
     END LOOP;
     
-    -- D. Sumar acumulado + nuevos
+    -- F. Sumar acumulado + nuevos
     v_puntos_totales := v_puntos_anteriores + v_puntos_nuevos;
 
-    -- E. LOGICA PRINCIPAL: Chequeo de los 500 Puntos
+    -- G. LOGICA PRINCIPAL: Chequeo de los 500 Puntos
     IF v_puntos_totales >= 500 THEN
         v_es_gratis := 1;          -- Se activa el premio
         v_puntos_totales := 0;     -- Se reinician los puntos (se gastan)
@@ -846,16 +871,14 @@ BEGIN
         v_total_final_dinero := v_subtotal_dinero + v_impuestos_dinero;
     END IF;
 
-    -- F. Insertar la Factura (Cabecera)
+    -- H. Insertar la Factura (Cabecera)
     INSERT INTO FACTURA_ONLINE (
         NUM_FACTURA, F_EMISION, ID_CLIENTE, PUNTOS_ACUM_VENTA, GRATIS_LEALTAD, TOTAL
     ) VALUES (
         v_nuevo_id_factura, SYSTIMESTAMP, p_id_cliente, v_puntos_totales, v_es_gratis, ROUND(v_total_final_dinero, 2)
     );
 
-    -- G. Insertar el Detalle de la Factura
-    -- Obtenemos el país de residencia del cliente para asociarlo al catálogo
-    SELECT RESIDENCIA INTO v_id_pais FROM CLIENTES_LEGO WHERE ID_CLIENTE = p_id_cliente;
+    -- I. Insertar el Detalle de la Factura
 
     -- Prepare the detail records for bulk insertion
     FOR i IN 1 .. p_items.COUNT LOOP
