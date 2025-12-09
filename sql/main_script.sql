@@ -411,6 +411,28 @@ BEGIN
 END;
 /
 
+CREATE OR REPLACE TRIGGER TRG_VALIDAR_FECHA_FACT_FISICA
+BEFORE INSERT ON FACTURA_FISICA
+FOR EACH ROW
+BEGIN
+    -- Compara si la fecha de emisión (sin hora) es menor a la fecha actual (sin hora)
+    IF TRUNC(:NEW.FECHA_EMISION) < TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20060, 'Error: No se puede insertar una factura física con fecha anterior al día de hoy.');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_VALIDAR_FECHA_FACT_ONLINE
+BEFORE INSERT ON FACTURA_ONLINE
+FOR EACH ROW
+BEGIN
+    -- Compara si la fecha de emisión (sin hora) es menor a la fecha actual (sin hora)
+    IF TRUNC(:NEW.F_EMISION) < TRUNC(SYSDATE) THEN
+        RAISE_APPLICATION_ERROR(-20061, 'Error: No se puede insertar una factura online con fecha anterior al día de hoy.');
+    END IF;
+END;
+/
+
 -- Sequences
 CREATE SEQUENCE S_PAISES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_CLIENTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
@@ -426,6 +448,7 @@ CREATE SEQUENCE S_JUGUETES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_LOTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DESCUENTOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_FACTURAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE S_FACTURAS_FIS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_FIS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_ONL START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
@@ -457,6 +480,32 @@ CREATE OR REPLACE TYPE T_VENTA_ITEM_TAB AS TABLE OF T_VENTA_ITEM_OBJ;
 
 
 -- PROCEDURES, FUNCTIONS AND PACKAGES
+
+CREATE OR REPLACE FUNCTION FN_OBTENER_ID_PAIS(
+    p_nombre_pais IN VARCHAR2
+) RETURN NUMBER IS
+    v_id_pais PAISES.ID_PAIS%TYPE;
+BEGIN
+    -- Busca el ID comparando el nombre (insensible a mayúsculas/minúsculas)
+    SELECT ID_PAIS
+    INTO v_id_pais
+    FROM PAISES
+    WHERE UPPER(NOMBRE) = UPPER(p_nombre_pais);
+
+    RETURN v_id_pais;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Si no encuentra el país, devuelve NULL
+        RETURN NULL;
+    WHEN TOO_MANY_ROWS THEN
+        -- Si por error hubiera nombres duplicados, levanta un error
+        RAISE_APPLICATION_ERROR(-20200, 'Error: Existen múltiples países con el nombre ' || p_nombre_pais);
+    WHEN OTHERS THEN
+        -- Manejo de otros errores imprevistos
+        RAISE_APPLICATION_ERROR(-20201, 'Error buscando país: ' || SQLERRM);
+END;
+/
 
 CREATE OR REPLACE FUNCTION FN_CALCULATE_CONVERSION(
     p_value IN NUMBER,
@@ -630,36 +679,7 @@ BEGIN
 END SP_GET_PARTICIPANT_BY_DOC;
 /
 
--- 1. Función para calcular el total de una factura usando el historial de precios
-CREATE OR REPLACE FUNCTION CALCULAR_TOTAL_FACTURA_ONLINE (p_num_factura IN NUMBER)
-RETURN NUMBER
-IS
-    v_total_calculado NUMBER(9, 2);
-BEGIN
-    -- La consulta une los detalles de la factura (df) con la factura (fo)
-    -- y busca en el historial de precios (hp) el precio vigente en la fecha de emisión (fo.f_emision).
-    SELECT SUM(hp.precio * df.cantidad) INTO v_total_calculado
-    FROM
-        Det_Factura_Onl df JOIN Factura_online fo ON df.num_factura = fo.num_factura
-        JOIN HISTORICO_PRECIO hp ON df.id_juguete = hp.id_juguete
-    WHERE
-        df.num_factura = p_num_factura AND fo.f_emision >= hp.fecha_inicio
-        AND (
-            hp.fecha_fin IS NULL
-            OR fo.f_emision <= hp.fecha_fin
-        );
-
-    -- Devuelve el total calculado, usando NVL para devolver 0 si no se encontró
-    -- ningún detalle o precio (v_total_calculado es NULL).
-    RETURN NVL(v_total_calculado , 0);
-EXCEPTION
-    WHEN OTHERS THEN
-        -- Manejar cualquier otro error de ejecución o SQL
-        -- Se recomienda no usar DBMS_OUTPUT en funciones destinadas a SQL.
-        RETURN NULL;
-END;
-/
--- 2. Función para obtener el precio actual de un juguete
+-- Función para obtener el precio actual de un juguete
 CREATE OR REPLACE FUNCTION OBTENER_PRECIO_INDEFINIDO (p_id_juguete IN NUMBER)
 RETURN NUMBER
 IS
@@ -702,104 +722,7 @@ EXCEPTION
         RAISE;
 END;
 /
-CREATE OR REPLACE FUNCTION CALCULAR_TOTAL_CON_IMPUESTOS (p_num_factura IN NUMBER)
-RETURN NUMBER
-IS
-    v_subtotal      NUMBER(9, 2);
-    v_es_ue         NUMBER(1);
-    v_total_final   NUMBER(9, 2);
-BEGIN
-    v_subtotal := CALCULAR_TOTAL_FACTURA_ONLINE (p_num_factura);
-    SELECT p.UNION_EUROPEA
-    INTO v_es_ue
-    FROM PAISES p
-    JOIN CLIENTES_LEGO c ON c.RESIDENCIA = p.ID_PAIS
-    JOIN Factura_online fo ON fo.ID_CLIENTE = c.ID_CLIENTE
-    WHERE fo.num_factura = p_num_factura;
-    IF v_es_ue = 1 THEN
-        v_total_final := v_subtotal * 1.05;
-    ELSE
-        v_total_final := v_subtotal * 1.15;
-    END IF;
-RETURN ROUND(v_total_final, 2); -- Redondeamos a 2 decimales
-EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-        -- Si no se encuentra la factura o el cliente
-        RETURN 0;
-    WHEN OTHERS THEN
-        -- Manejo de errores generales
-        RAISE_APPLICATION_ERROR(-20001, 'Error calculando total: ' || SQLERRM);
-END;
-/
 
-
--- Following procedure should be not used. Not deleted yet for reference.
-CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_CON_PUNTOS (p_id_cliente IN NUMBER,p_total_compra IN NUMBER) 
-IS
-    v_puntos_anteriores NUMBER := 0;
-    v_puntos_nuevos     NUMBER := 0;
-    v_puntos_totales    NUMBER := 0;
-    v_es_gratis         NUMBER(1) := 0;
-    v_nuevo_id_factura  FACTURA_ONLINE.NUM_FACTURA%TYPE;
-BEGIN
-    -- Get the next invoice number
-    SELECT NVL(MAX(NUM_FACTURA), 0) + 1
-    INTO v_nuevo_id_factura
-    FROM FACTURA_ONLINE;
-
-    -- Get the last accumulated points for the client
-    BEGIN
-        SELECT PUNTOS_ACUM_VENTA
-        INTO v_puntos_anteriores
-        FROM FACTURA_ONLINE
-        WHERE ID_CLIENTE = p_id_cliente
-        ORDER BY F_EMISION DESC
-        FETCH FIRST 1 ROWS ONLY;
-    EXCEPTION
-        WHEN NO_DATA_FOUND THEN
-            v_puntos_anteriores := 0;
-    END;
-    -- Business Rule: Award 1 point for every 10 currency units spent.
-    -- This keeps it consistent with the idea that points are earned, not just a 1:1 copy of the total.
-    v_puntos_nuevos := FLOOR(p_total_compra);
-
-    v_puntos_totales := v_puntos_anteriores + v_puntos_nuevos;
-    IF v_puntos_totales >= 500 THEN
-        v_es_gratis := 1;           -- Activar "Gratis Lealtad"
-        v_puntos_totales := 0;      -- Reiniciar puntos (se consumen por el premio)
-                                    -- NOTA: Si prefieres que conserven el sobrante (ej. 520 -> quedan 20),
-                                    -- cambia la linea anterior por: v_puntos_totales := v_puntos_totales - 500;
-    ELSE
-        -- Caso: No llega a 500
-        v_es_gratis := 0;           -- No hay premio gratis
-        -- v_puntos_totales se queda con la suma (Acumulado + Nuevo)
-    END IF;
-    INSERT INTO FACTURA_ONLINE (
-        NUM_FACTURA,
-        F_EMISION,
-        ID_CLIENTE,
-        PUNTOS_ACUM_VENTA,
-        GRATIS_LEALTAD,
-        TOTAL
-    ) VALUES (
-        v_nuevo_id_factura,
-        SYSTIMESTAMP,
-        p_id_cliente,
-        v_puntos_totales,
-        v_es_gratis,
-        p_total_compra
-    );
-    COMMIT; -- Guardar cambios
-    DBMS_OUTPUT.PUT_LINE('Factura #' || v_nuevo_id_factura || ' registrada con éxito.');
-    IF v_es_gratis = 1 THEN
-        DBMS_OUTPUT.PUT_LINE('¡Felicidades! Cliente obtuvo recompensa por lealtad.');
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        ROLLBACK;
-        RAISE_APPLICATION_ERROR(-20001, 'Error al procesar la venta: ' || SQLERRM);
-END;
-/
 
 CREATE OR REPLACE FUNCTION FN_CALCULAR_PUNTOS_JUGUETE ( p_id_juguete IN NUMBER, p_cantidad   IN NUMBER)
 RETURN NUMBER 
@@ -977,6 +900,7 @@ CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_FISICA (
 BEGIN
     -- A. Obtener el siguiente número de factura para la tienda
     v_nuevo_id_factura := S_FACTURAS.NEXTVAL;
+    v_nuevo_id_factura := S_FACTURAS_FIS.NEXTVAL;
 
     -- B. Iterar sobre cada juguete comprado para validar stock y preparar inserción
     FOR i IN 1 .. p_ids_juguete.COUNT LOOP
@@ -1864,6 +1788,21 @@ PIVOT (-- Divide la columna de los horarios en 7 columnas, una para cada día
 ORDER BY "PAIS", "TIENDA";
 
 COMMIT;
+
+CREATE OR REPLACE VIEW V_PRODUCTOS_POR_TIENDA AS
+SELECT
+    t.NOMBRE AS "Tienda",
+    j.NOMBRE_JUGUETE AS "Producto",
+    j.ID_JUGUETE AS "Identificador"
+FROM
+    TIENDAS t,
+    LOTES_INVENTARIO li,
+    JUGUETES j
+WHERE
+    -- Relación por Integridad Referencial: TIENDAS (PK) <-> LOTES_INVENTARIO (FK)
+    t.ID_TIENDA = li.ID_TIENDA
+    -- Relación por Integridad Referencial: LOTES_INVENTARIO (FK) <-> JUGUETES (PK)
+    AND li.ID_JUGUETE = j.ID_JUGUETE;
 
 --UNA VEZ SE CREE JUGUETE, VERIFICAR ESTE, PARA LA TABLA Y EL ID
 --VIEW DE CADA UNO DE LOS CATÁLOGOS POR SEPARADO, PORQUE SE NECESITA UNO POR CADA PAIS PARA TIENDA ONLINE
