@@ -1,18 +1,20 @@
 SELECT * FROM V_HORARIOS_TIENDAS;
+-- WHERE ID_TIENDA = &id_tienda;
 /
 
 SELECT * FROM V_CLIENTES_LEGO;
 /
 
 SELECT * FROM V_PRODUCTOS_POR_TIENDA;
+-- WHERE ID_TIENDA = &id_tienda;
 /
 
-SELECT FN_CALCULAR_STOCK_NETO(2, 11203) AS Neto_Stock FROM DUAL;
+SELECT FN_CALCULAR_STOCK_NETO(&id_tienda, &id_juguete) AS Neto_Stock FROM DUAL;
 /
 
 DECLARE
-    p_id_tienda      TIENDAS.ID_TIENDA%TYPE      := 2; 
-    p_id_cliente     CLIENTES_LEGO.ID_CLIENTE%TYPE := 1;
+    p_id_tienda      TIENDAS.ID_TIENDA%TYPE      := &id_tienda; 
+    p_id_cliente     CLIENTES_LEGO.ID_CLIENTE%TYPE := &id_cliente;
     p_ids_juguete    T_NUMBER_ARRAY := T_NUMBER_ARRAY(11203, 11203, 11203);                  
 
 BEGIN
@@ -24,6 +26,7 @@ BEGIN
         p_id_tienda   => p_id_tienda,
         p_ids_juguete => p_ids_juguete
     );
+    COMMIT;
 
     DBMS_OUTPUT.PUT_LINE(' -> Venta registrada exitosamente.');
 EXCEPTION
@@ -34,9 +37,10 @@ EXCEPTION
 END;
 /
 
-SELECT V_FACTURA_FISICA_DETALLE_REF.* FROM V_FACTURA_FISICA_DETALLE_REF
-WHERE "Numero de Factura" = 2;
+SELECT * FROM V_FACTURA_FISICA_DETALLE_REF;
+-- WHERE "Numero de Factura" = &num_factura_fisica;
 /
 
 SELECT * FROM V_DETALLE_FACTURA_FISICA_REF;
+-- WHERE "Numero de Factura" = &num_factura_fisica;
 /
