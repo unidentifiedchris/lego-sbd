@@ -448,7 +448,6 @@ CREATE SEQUENCE S_JUGUETES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_LOTES START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DESCUENTOS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_FACTURAS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
-CREATE SEQUENCE S_FACTURAS_FIS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_FIS START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE S_DET_FACTURA_ONL START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
@@ -923,7 +922,6 @@ CREATE OR REPLACE PROCEDURE REGISTRAR_VENTA_LEGO_FISICA (
 BEGIN
     -- A. Obtener el siguiente número de factura para la tienda
     v_nuevo_id_factura := S_FACTURAS.NEXTVAL;
-    v_nuevo_id_factura := S_FACTURAS_FIS.NEXTVAL;
 
     -- B. Iterar sobre cada juguete comprado para validar stock y preparar inserción
     FOR i IN 1 .. p_ids_juguete.COUNT LOOP
@@ -2321,6 +2319,8 @@ INSERT ALL
     INTO HORARIOS VALUES (8, 1, TO_DATE('10:30:00', 'HH24:MI:SS'), TO_DATE('22:00:00', 'HH24:MI:SS'))
 SELECT * FROM DUAL;
 
+COMMIT;
+
 INSERT INTO TEMAS (ID_TEMA, NOMBRE_TEMA, DESCRIPCION_TEMA, TIPO_TEMA, LICENCIA_EXTERNA)
 VALUES (1, 'LEGO Bluey',
         'Sets basados en la serie animada Bluey.',
@@ -2342,7 +2342,7 @@ VALUES (4, 'LEGO Avatar',
         'SERIE', 1);
 
 
-
+COMMIT;
 --------------------------
 -- Tema 1: LEGO Bluey (ID_TEMA = 1)
 --------------------------
@@ -2612,6 +2612,8 @@ INSERT INTO JUGUETES (
     'D',
     'Escena emblemática con Toruk Makto y el Árbol de las Almas.'
 );
+
+COMMIT;
 ------------------------------------------------------------
 -- CATALOGO_PAIS
 --  ID_PAIS, ID_JUGUETE, LIMITE_COMPRA
@@ -2689,6 +2691,8 @@ INSERT INTO CATALOGO_PAIS VALUES (6, 75572, 2);
 INSERT INTO CATALOGO_PAIS VALUES (6, 75573, 2);
 INSERT INTO CATALOGO_PAIS VALUES (6, 75574, 2);
 
+COMMIT;
+
 ------------------------------------------------------------
 -- HISTORICO_PRECIO
 --  Un registro vigente por JUGUETE (FECHA_FIN NULL)
@@ -2746,6 +2750,8 @@ VALUES (75573, DATE '2024-01-01', 99.99, NULL);
 INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
 VALUES (75574, DATE '2024-01-01', 149.99, NULL);
 
+COMMIT;
+
 ------------------------------------------------------------
 -- LOTES_INVENTARIO
 ------------------------------------------------------------
@@ -2797,5 +2803,346 @@ INSERT INTO LOTES_INVENTARIO VALUES (S_LOTES.nextval, 8, 10458, 70);
 INSERT INTO LOTES_INVENTARIO VALUES (S_LOTES.nextval, 8, 60367, 60);
 INSERT INTO LOTES_INVENTARIO VALUES (S_LOTES.nextval, 8, 31173, 50);
 INSERT INTO LOTES_INVENTARIO VALUES (S_LOTES.nextval, 8, 75572, 40);
+
+COMMIT;
+
+-- Bloque para registrar ventas online
+DECLARE
+    p_items T_VENTA_ITEM_TAB;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- Registrando Ventas Online de Ejemplo ---');
+
+    -- Venta 1: Cliente 2 (Irlanda, UE) compra 2 juguetes del catálogo irlandés.
+    p_items := T_VENTA_ITEM_TAB(
+        T_VENTA_ITEM_OBJ(11203, 1), -- Bluey's Family House
+        T_VENTA_ITEM_OBJ(60466, 2)  -- Yellow Bulldozer
+    );
+    REGISTRAR_VENTA_LEGO_ONLINE(p_id_cliente => 2, p_items => p_items);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta online registrada para el cliente 2.');
+
+    -- Venta 2: Cliente 4 (residente en Filipinas, No-UE) compra 1 juguete del catálogo filipino.
+    p_items := T_VENTA_ITEM_TAB(
+        T_VENTA_ITEM_OBJ(31109, 1) -- Pirate Ship
+    );
+    REGISTRAR_VENTA_LEGO_ONLINE(p_id_cliente => 4, p_items => p_items);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta online registrada para el cliente 4.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas online: ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas online - Ejemplo Adicional 1
+DECLARE
+    p_items T_VENTA_ITEM_TAB;
+BEGIN
+
+    -- Venta 3: Cliente 5 (Filipina residente en Irlanda, UE) compra varios juguetes.
+    -- Juguetes disponibles en Irlanda (catálogo completo).
+    p_items := T_VENTA_ITEM_TAB(
+        T_VENTA_ITEM_OBJ(11201, 2), -- Playground Fun with Bluey and Chloe (A-range, 5 pts each)
+        T_VENTA_ITEM_OBJ(60465, 1), -- Emergency Air Ambulance Airplane (C-range, 50 pts)
+        T_VENTA_ITEM_OBJ(31173, 3)  -- Wild Animals: Tropical Toucan (B-range, 20 pts each)
+    );
+    REGISTRAR_VENTA_LEGO_ONLINE(p_id_cliente => 5, p_items => p_items);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta online registrada para el cliente 5 (Irlanda).');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas online (Ejemplo Adicional 1): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas online - Ejemplo Adicional 2 (Activando recompensa de lealtad)
+DECLARE
+    p_items T_VENTA_ITEM_TAB;
+BEGIN
+
+    -- Venta 4: Cliente 4 (Sudafricano residente en Filipinas, No-UE) compra juguetes de alto valor en puntos.
+    -- Catálogo de Filipinas: Bluey + Creator. Creator tiene juguetes de rango 'D' (200 puntos).
+    -- Comprando 3 unidades del juguete 31109 (Pirate Ship, 200 puntos cada uno) = 600 puntos.
+    -- Esto debería activar la recompensa de lealtad y reiniciar sus puntos a 0.
+    p_items := T_VENTA_ITEM_TAB(
+        T_VENTA_ITEM_OBJ(31109, 3) -- Pirate Ship (D-range, 200 pts each)
+    );
+    REGISTRAR_VENTA_LEGO_ONLINE(p_id_cliente => 4, p_items => p_items);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta online registrada para el cliente 4 (Filipinas), debería activar recompensa.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas online (Ejemplo Adicional 2): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas online - Ejemplo Adicional 3
+DECLARE
+    p_items T_VENTA_ITEM_TAB;
+BEGIN
+
+    -- Venta 5: Cliente 9 (Indonesio residente en Indonesia, No-UE) compra juguetes.
+    -- Catálogo de Indonesia: Creator + Avatar.
+    p_items := T_VENTA_ITEM_TAB(
+        T_VENTA_ITEM_OBJ(75571, 1), -- Neytiri & Thanator vs. AMP Suit Quaritch (C-range)
+        T_VENTA_ITEM_OBJ(31154, 1)  -- Forest Animals: Red Fox (C-range)
+    );
+    REGISTRAR_VENTA_LEGO_ONLINE(p_id_cliente => 9, p_items => p_items);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta online registrada para el cliente 9 (Indonesia).');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas online (Ejemplo Adicional 3): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+COMMIT;
+
+-- Bloque para registrar ventas físicas
+DECLARE
+    p_ids_juguete T_NUMBER_ARRAY;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- Registrando Ventas Físicas de Ejemplo ---');
+
+    -- Venta 1: Cliente 1 compra 2 juguetes en la tienda 4 (El Trébol, Chile).
+    -- El juguete 60367 está en el inventario de esa tienda.
+    p_ids_juguete := T_NUMBER_ARRAY(60367, 60367);
+    REGISTRAR_VENTA_LEGO_FISICA(
+        p_id_cliente  => 1,
+        p_id_tienda   => 4,
+        p_ids_juguete => p_ids_juguete
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Venta física registrada para el cliente 1 en la tienda 4.');
+
+    -- Venta 2: Cliente 8 compra 1 juguete en la tienda 8 (Suwon, Corea del Sur).
+    -- El juguete 10458 está en el inventario de esa tienda.
+    p_ids_juguete := T_NUMBER_ARRAY(10458);
+    REGISTRAR_VENTA_LEGO_FISICA(
+        p_id_cliente  => 8,
+        p_id_tienda   => 8,
+        p_ids_juguete => p_ids_juguete
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Venta física registrada para el cliente 8 en la tienda 8.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas físicas: ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas físicas - Ejemplo Adicional 1
+DECLARE
+    p_ids_juguete T_NUMBER_ARRAY;
+BEGIN
+
+    -- Venta 3: Cliente 3 (Budi Santoso) compra 1 juguete en la tienda 6 (Surabaya, Indonesia).
+    -- El juguete 31109 (Pirate Ship) está en el inventario de esa tienda.
+    p_ids_juguete := T_NUMBER_ARRAY(31109);
+    REGISTRAR_VENTA_LEGO_FISICA(
+        p_id_cliente  => 3,
+        p_id_tienda   => 6,
+        p_ids_juguete => p_ids_juguete
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Venta física registrada para el cliente 3 en la tienda 6.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas físicas (Ejemplo Adicional 1): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas físicas - Ejemplo Adicional 2
+DECLARE
+    p_ids_juguete T_NUMBER_ARRAY;
+BEGIN
+
+    -- Venta 4: Cliente 7 (Sean Murphy) compra 2 juguetes en la tienda 3 (Dublin, Irlanda).
+    -- El juguete 11202 (Bluey's Beach & Family Car Trip) está en el inventario de esa tienda.
+    p_ids_juguete := T_NUMBER_ARRAY(11202, 11202);
+    REGISTRAR_VENTA_LEGO_FISICA(
+        p_id_cliente  => 7,
+        p_id_tienda   => 3,
+        p_ids_juguete => p_ids_juguete
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Venta física registrada para el cliente 7 en la tienda 3.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas físicas (Ejemplo Adicional 2): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para registrar ventas físicas - Ejemplo Adicional 3
+DECLARE
+    p_ids_juguete T_NUMBER_ARRAY;
+BEGIN
+
+    -- Venta 5: Cliente 1 (Juan Soto) compra 1 juguete en la tienda 5 (Vespucio, Chile).
+    -- El juguete 11203 (Bluey's Family House) está en el inventario de esa tienda.
+    p_ids_juguete := T_NUMBER_ARRAY(11203);
+    REGISTRAR_VENTA_LEGO_FISICA(p_id_cliente => 1, p_id_tienda => 5, p_ids_juguete => p_ids_juguete);
+    DBMS_OUTPUT.PUT_LINE(' -> Venta física registrada para el cliente 1 en la tienda 5.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando ventas físicas (Ejemplo Adicional 3): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+COMMIT;
+
+-- Bloque para crear y pagar inscripciones a tours
+DECLARE
+    v_tour_date             DATE := TO_DATE('2026-03-10', 'YYYY-MM-DD');
+    v_participants          t_participant_doc_tab;
+    v_new_inscripcion_num   NUMBER;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- Registrando Inscripciones a Tours de Ejemplo ---');
+
+    -- Inscripción 1: Cliente 7 (Sean Murphy) y Cliente 10 (Camila Rojas) se inscriben al tour.
+    v_participants := t_participant_doc_tab(
+        t_participant_doc_obj(0, 'DOC-IR-077'), -- Sean Murphy (Adulto)
+        t_participant_doc_obj(0, 'DOC-CL-101')  -- Camila Rojas (Adulto)
+    );
+
+    -- Crear la inscripción (queda en estado PENDIENTE)
+    pkg_lego_tours.SP_CREATE_INSCRIPCION_FLOW(
+        p_f_inicio            => v_tour_date,
+        p_participants        => v_participants,
+        p_new_inscripcion_out => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Inscripción #' || v_new_inscripcion_num || ' creada para el tour del ' || TO_CHAR(v_tour_date, 'YYYY-MM-DD') || '.');
+
+    -- Finalizar el pago de esa misma inscripción (cambia a estado PAGO y genera entradas)
+    pkg_lego_tours.SP_FINALIZE_PAYMENT(
+        p_f_inicio        => v_tour_date,
+        p_num_inscripcion => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Pago finalizado para la inscripción #' || v_new_inscripcion_num || '.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando inscripciones a tours: ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para crear y pagar inscripciones a tours - Ejemplo Adicional 1
+DECLARE
+    v_tour_date             DATE := TO_DATE('2026-03-20', 'YYYY-MM-DD');
+    v_participants          t_participant_doc_tab;
+    v_new_inscripcion_num   NUMBER;
+BEGIN
+
+    -- Inscripción 2: Cliente 1 (Juan Soto) y Fan 1 (Tomas Soto) se inscriben al tour.
+    v_participants := t_participant_doc_tab(
+        t_participant_doc_obj(0, 'DOC-CH-001'), -- Juan Soto (Adulto)
+        t_participant_doc_obj(1, 'DOC-FAN-CH-1')  -- Tomas Soto (Menor)
+    );
+
+    pkg_lego_tours.SP_CREATE_INSCRIPCION_FLOW(
+        p_f_inicio            => v_tour_date,
+        p_participants        => v_participants,
+        p_new_inscripcion_out => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Inscripción #' || v_new_inscripcion_num || ' creada para el tour del ' || TO_CHAR(v_tour_date, 'YYYY-MM-DD') || '.');
+
+    pkg_lego_tours.SP_FINALIZE_PAYMENT(
+        p_f_inicio        => v_tour_date,
+        p_num_inscripcion => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Pago finalizado para la inscripción #' || v_new_inscripcion_num || '.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando inscripciones a tours (Ejemplo Adicional 1): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para crear y pagar inscripciones a tours - Ejemplo Adicional 2
+DECLARE
+    v_tour_date             DATE := TO_DATE('2026-04-01', 'YYYY-MM-DD');
+    v_participants          t_participant_doc_tab;
+    v_new_inscripcion_num   NUMBER;
+BEGIN
+
+    -- Inscripción 3: Cliente 8 (Soo-Jin Park) y Fan 8 (Ji-Hoo Park) se inscriben al tour.
+    v_participants := t_participant_doc_tab(
+        t_participant_doc_obj(0, 'DOC-KR-088'), -- Soo-Jin Park (Adulto)
+        t_participant_doc_obj(1, 'DOC-FAN-KR-8')  -- Ji-Hoo Park (Menor)
+    );
+
+    pkg_lego_tours.SP_CREATE_INSCRIPCION_FLOW(
+        p_f_inicio            => v_tour_date,
+        p_participants        => v_participants,
+        p_new_inscripcion_out => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Inscripción #' || v_new_inscripcion_num || ' creada para el tour del ' || TO_CHAR(v_tour_date, 'YYYY-MM-DD') || '.');
+
+    pkg_lego_tours.SP_FINALIZE_PAYMENT(
+        p_f_inicio        => v_tour_date,
+        p_num_inscripcion => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Pago finalizado para la inscripción #' || v_new_inscripcion_num || '.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando inscripciones a tours (Ejemplo Adicional 2): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+-- Bloque para crear y pagar inscripciones a tours - Ejemplo Adicional 3
+DECLARE
+    v_tour_date             DATE := TO_DATE('2026-04-05', 'YYYY-MM-DD');
+    v_participants          t_participant_doc_tab;
+    v_new_inscripcion_num   NUMBER;
+BEGIN
+
+    -- Inscripción 4: Cliente 9 (Agung Widodo) y Fan 9 (Ratna Widodo) se inscriben al tour.
+    v_participants := t_participant_doc_tab(
+        t_participant_doc_obj(0, 'DOC-IN-099'), -- Agung Widodo (Adulto)
+        t_participant_doc_obj(1, 'DOC-FAN-IN-9')  -- Ratna Widodo (Menor)
+    );
+
+    pkg_lego_tours.SP_CREATE_INSCRIPCION_FLOW(
+        p_f_inicio            => v_tour_date,
+        p_participants        => v_participants,
+        p_new_inscripcion_out => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Inscripción #' || v_new_inscripcion_num || ' creada para el tour del ' || TO_CHAR(v_tour_date, 'YYYY-MM-DD') || '.');
+
+    pkg_lego_tours.SP_FINALIZE_PAYMENT(
+        p_f_inicio        => v_tour_date,
+        p_num_inscripcion => v_new_inscripcion_num
+    );
+    DBMS_OUTPUT.PUT_LINE(' -> Pago finalizado para la inscripción #' || v_new_inscripcion_num || '.');
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('ERROR registrando inscripciones a tours (Ejemplo Adicional 3): ' || SQLERRM);
+        ROLLBACK;
+END;
+/
 
 COMMIT;
