@@ -7,3 +7,4 @@ CREATE OR REPLACE TYPE t_participant_doc_obj AS OBJECT (
 
 CREATE OR REPLACE TYPE t_participant_doc_tab AS TABLE OF t_participant_doc_obj;
 /
+

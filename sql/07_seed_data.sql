@@ -228,3 +228,489 @@ INSERT ALL
     INTO HORARIOS VALUES (8, 1, TO_DATE('10:30:00', 'HH24:MI:SS'), TO_DATE('22:00:00', 'HH24:MI:SS'))
 SELECT * FROM DUAL;
 COMMIT;
+
+INSERT INTO TEMAS (ID_TEMA, NOMBRE_TEMA, DESCRIPCION_TEMA, TIPO_TEMA, LICENCIA_EXTERNA)
+VALUES (1, 'LEGO Bluey',
+        'Sets basados en la serie animada Bluey.',
+        'SERIE', 1);
+
+INSERT INTO TEMAS (ID_TEMA, NOMBRE_TEMA, DESCRIPCION_TEMA, TIPO_TEMA, LICENCIA_EXTERNA)
+VALUES (2, 'LEGO City',
+        'Ciudad LEGO con vehículos y escenas urbanas.',
+        'TEMA', 0);
+
+INSERT INTO TEMAS (ID_TEMA, NOMBRE_TEMA, DESCRIPCION_TEMA, TIPO_TEMA, LICENCIA_EXTERNA)
+VALUES (3, 'LEGO Creator 3in1',
+        'Modelos 3 en 1 que se pueden reconstruir en diferentes diseños.',
+        'TEMA', 0);
+
+INSERT INTO TEMAS (ID_TEMA, NOMBRE_TEMA, DESCRIPCION_TEMA, TIPO_TEMA, LICENCIA_EXTERNA)
+VALUES (4, 'LEGO Avatar',
+        'Sets basados en las películas de Avatar de James Cameron.',
+        'SERIE', 1);
+
+
+------------------------------------------------------------
+-- 6. JUGUETES
+--   ES_SET: 1 = set principal
+--   RANGO_PRECIO: 'A','B','C','D' (aquí asignado arbitrariamente)
+--   NUMERO_PIEZAS y RANGO_EDAD son valores de ejemplo.
+--   ARCHIVO_INSTRUCCIONES: se usa la URL del producto.
+------------------------------------------------------------
+
+--------------------------
+-- Tema 1: LEGO Bluey (ID_TEMA = 1)
+--------------------------
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    11203,
+    1,
+    'Bluey''s Family House (11203)',
+    '4+',
+    150,
+    1,
+    'https://www.lego.com/en-us/product/blueys-family-house-11203',
+    'B',
+    'Casa de la familia de Bluey con varias habitaciones y figuras.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    11201,
+    1,
+    'Playground Fun with Bluey and Chloe (11201)',
+    '4+',
+    80,
+    1,
+    'https://www.lego.com/en-us/product/playground-fun-with-bluey-and-chloe-11201',
+    'A',
+    'Parque infantil con Bluey, Chloe y accesorios de juego.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    11202,
+    1,
+    'Bluey''s Beach & Family Car Trip (11202)',
+    '4+',
+    120,
+    1,
+    'https://www.lego.com/en-us/product/blueys-beach-family-car-trip-11202',
+    'B',
+    'Viaje familiar de Bluey a la playa con carro y accesorios.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    10458,
+    1,
+    'Ice Cream Trip with Bluey (10458)',
+    '2+',
+    40,
+    1,
+    'https://www.lego.com/en-us/product/ice-cream-trip-with-bluey-10458',
+    'A',
+    'Set sencillo de viaje por helado con Bluey, ideal para peques.'
+);
+
+
+--------------------------
+-- Tema 2: LEGO City (ID_TEMA = 2)
+--------------------------
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    60466,
+    2,
+    'Yellow Bulldozer (60466)',
+    '6+',
+    150,
+    1,
+    'https://www.lego.com/en-us/product/yellow-bulldozer-60466',
+    'B',
+    'Bulldozer amarillo de construcción con minifiguras y accesorios.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    60456,
+    2,
+    'Police Boat Chase (60456)',
+    '6+',
+    200,
+    1,
+    'https://www.lego.com/en-us/product/police-boat-chase-60456',
+    'B',
+    'Persecución policial en bote con lanchas y minifiguras.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    60465,
+    2,
+    'Emergency Air Ambulance Airplane (60465)',
+    '7+',
+    250,
+    1,
+    'https://www.lego.com/en-us/product/emergency-air-ambulance-airplane-60465',
+    'C',
+    'Avión ambulancia de emergencia con equipo médico y tripulación.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    60367,
+    2,
+    'Passenger Airplane (60367)',
+    '7+',
+    300,
+    1,
+    'https://www.lego.com/en-us/product/passenger-airplane-60367',
+    'C',
+    'Avión de pasajeros de LEGO City con terminal y minifiguras.'
+);
+
+
+--------------------------
+-- Tema 3: LEGO Creator 3in1 (ID_TEMA = 3)
+--------------------------
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    31109,
+    3,
+    'Pirate Ship (31109)',
+    '9+',
+    1200,
+    1,
+    'https://www.lego.com/en-us/product/pirate-ship-31109',
+    'D',
+    'Barco pirata Creator 3en1 que se puede reconstruir en otros modelos.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    31154,
+    3,
+    'Forest Animals: Red Fox (31154)',
+    '9+',
+    600,
+    1,
+    'https://www.lego.com/en-us/product/forest-animals-red-fox-31154',
+    'C',
+    'Zorro rojo y otros animales del bosque en un set 3en1.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    31142,
+    3,
+    'Space Roller Coaster (31142)',
+    '9+',
+    900,
+    1,
+    'https://www.lego.com/en-us/product/space-roller-coaster-31142',
+    'D',
+    'Montaña rusa espacial 3en1 con vagones y decoración temática.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    31173,
+    3,
+    'Wild Animals: Tropical Toucan (31173)',
+    '7+',
+    250,
+    1,
+    'https://www.lego.com/en-us/product/wild-animals-tropical-toucan-31173',
+    'B',
+    'Tucán tropical y otros animales salvajes en formato 3en1.'
+);
+
+
+--------------------------
+-- Tema 4: LEGO Avatar (ID_TEMA = 4)
+--------------------------
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    75571,
+    4,
+    'Neytiri & Thanator vs. AMP Suit Quaritch (75571)',
+    '9+',
+    800,
+    1,
+    'https://www.lego.com/en-us/product/neytiri-thanator-vs-amp-suit-quaritch-75571',
+    'C',
+    'Batalla entre Neytiri en su Thanator y el AMP Suit de Quaritch.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    75572,
+    4,
+    'Jake & Neytiri''s First Banshee Flight (75572)',
+    '9+',
+    750,
+    1,
+    'https://www.lego.com/en-us/product/jake-neytiris-first-banshee-flight-75572',
+    'C',
+    'Primer vuelo de Jake y Neytiri sobre los banshees de Pandora.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    75573,
+    4,
+    'Floating Mountains: Site 26 & RDA Samson (75573)',
+    '10+',
+    950,
+    1,
+    'https://www.lego.com/en-us/product/floating-mountains-site-26-rda-samson-75573',
+    'D',
+    'Montañas flotantes de Pandora, sitio 26 y helicóptero RDA Samson.'
+);
+
+INSERT INTO JUGUETES (
+    ID_JUGUETE, ID_TEMA, NOMBRE_JUGUETE,
+    RANGO_EDAD, NUMERO_PIEZAS, ES_SET,
+    ARCHIVO_INSTRUCCIONES, RANGO_PRECIO, DESCRIPCION
+) VALUES (
+    75574,
+    4,
+    'Toruk Makto & Tree of Souls (75574)',
+    '12+',
+    1200,
+    1,
+    'https://www.lego.com/en-us/product/toruk-makto-tree-of-souls-75574',
+    'D',
+    'Escena emblemática con Toruk Makto y el Árbol de las Almas.'
+);
+
+------------------------------------------------------------
+-- CATALOGO_PAIS
+--  ID_PAIS, ID_JUGUETE, LIMITE_COMPRA
+------------------------------------------------------------
+
+-- Sudáfrica (10): Bluey + City
+INSERT INTO CATALOGO_PAIS VALUES (10, 11203, 5);
+INSERT INTO CATALOGO_PAIS VALUES (10, 11201, 5);
+INSERT INTO CATALOGO_PAIS VALUES (10, 11202, 5);
+INSERT INTO CATALOGO_PAIS VALUES (10, 10458, 5);
+INSERT INTO CATALOGO_PAIS VALUES (10, 60466, 4);
+INSERT INTO CATALOGO_PAIS VALUES (10, 60456, 4);
+INSERT INTO CATALOGO_PAIS VALUES (10, 60465, 4);
+INSERT INTO CATALOGO_PAIS VALUES (10, 60367, 4);
+
+-- Filipinas (20): Bluey + Creator
+INSERT INTO CATALOGO_PAIS VALUES (20, 11203, 5);
+INSERT INTO CATALOGO_PAIS VALUES (20, 11201, 5);
+INSERT INTO CATALOGO_PAIS VALUES (20, 11202, 5);
+INSERT INTO CATALOGO_PAIS VALUES (20, 10458, 5);
+INSERT INTO CATALOGO_PAIS VALUES (20, 31109, 3);
+INSERT INTO CATALOGO_PAIS VALUES (20, 31154, 3);
+INSERT INTO CATALOGO_PAIS VALUES (20, 31142, 3);
+INSERT INTO CATALOGO_PAIS VALUES (20, 31173, 3);
+
+-- Irlanda (30): catálogo completo (todos los sets)
+-- Bluey
+INSERT INTO CATALOGO_PAIS VALUES (30, 11203, 5);
+INSERT INTO CATALOGO_PAIS VALUES (30, 11201, 5);
+INSERT INTO CATALOGO_PAIS VALUES (30, 11202, 5);
+INSERT INTO CATALOGO_PAIS VALUES (30, 10458, 5);
+-- City
+INSERT INTO CATALOGO_PAIS VALUES (30, 60466, 4);
+INSERT INTO CATALOGO_PAIS VALUES (30, 60456, 4);
+INSERT INTO CATALOGO_PAIS VALUES (30, 60465, 4);
+INSERT INTO CATALOGO_PAIS VALUES (30, 60367, 4);
+-- Creator 3in1
+INSERT INTO CATALOGO_PAIS VALUES (30, 31109, 3);
+INSERT INTO CATALOGO_PAIS VALUES (30, 31154, 3);
+INSERT INTO CATALOGO_PAIS VALUES (30, 31142, 3);
+INSERT INTO CATALOGO_PAIS VALUES (30, 31173, 3);
+-- Avatar
+INSERT INTO CATALOGO_PAIS VALUES (30, 75571, 2);
+INSERT INTO CATALOGO_PAIS VALUES (30, 75572, 2);
+INSERT INTO CATALOGO_PAIS VALUES (30, 75573, 2);
+INSERT INTO CATALOGO_PAIS VALUES (30, 75574, 2);
+
+-- Chile (40): City + Avatar
+INSERT INTO CATALOGO_PAIS VALUES (40, 60466, 4);
+INSERT INTO CATALOGO_PAIS VALUES (40, 60456, 4);
+INSERT INTO CATALOGO_PAIS VALUES (40, 60465, 4);
+INSERT INTO CATALOGO_PAIS VALUES (40, 60367, 4);
+INSERT INTO CATALOGO_PAIS VALUES (40, 75571, 2);
+INSERT INTO CATALOGO_PAIS VALUES (40, 75572, 2);
+INSERT INTO CATALOGO_PAIS VALUES (40, 75573, 2);
+INSERT INTO CATALOGO_PAIS VALUES (40, 75574, 2);
+
+-- Indonesia (50): Creator + Avatar
+INSERT INTO CATALOGO_PAIS VALUES (50, 31109, 3);
+INSERT INTO CATALOGO_PAIS VALUES (50, 31154, 3);
+INSERT INTO CATALOGO_PAIS VALUES (50, 31142, 3);
+INSERT INTO CATALOGO_PAIS VALUES (50, 31173, 3);
+INSERT INTO CATALOGO_PAIS VALUES (50, 75571, 2);
+INSERT INTO CATALOGO_PAIS VALUES (50, 75572, 2);
+INSERT INTO CATALOGO_PAIS VALUES (50, 75573, 2);
+INSERT INTO CATALOGO_PAIS VALUES (50, 75574, 2);
+
+-- Corea del Sur (60): Bluey + Avatar
+INSERT INTO CATALOGO_PAIS VALUES (60, 11203, 5);
+INSERT INTO CATALOGO_PAIS VALUES (60, 11201, 5);
+INSERT INTO CATALOGO_PAIS VALUES (60, 11202, 5);
+INSERT INTO CATALOGO_PAIS VALUES (60, 10458, 5);
+INSERT INTO CATALOGO_PAIS VALUES (60, 75571, 2);
+INSERT INTO CATALOGO_PAIS VALUES (60, 75572, 2);
+INSERT INTO CATALOGO_PAIS VALUES (60, 75573, 2);
+INSERT INTO CATALOGO_PAIS VALUES (60, 75574, 2);
+
+------------------------------------------------------------
+-- HISTORICO_PRECIO
+--  Un registro vigente por JUGUETE (FECHA_FIN NULL)
+------------------------------------------------------------
+
+-- Bluey
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (11203, DATE '2024-01-01', 59.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (11201, DATE '2024-01-01', 24.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (11202, DATE '2024-01-01', 39.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (10458, DATE '2024-01-01', 19.99, NULL);
+
+-- City
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (60466, DATE '2024-01-01', 34.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (60456, DATE '2024-01-01', 39.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (60465, DATE '2024-01-01', 49.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (60367, DATE '2024-01-01', 79.99, NULL);
+
+-- Creator 3in1
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (31109, DATE '2024-01-01', 119.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (31154, DATE '2024-01-01', 49.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (31142, DATE '2024-01-01', 109.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (31173, DATE '2024-01-01', 24.99, NULL);
+
+-- Avatar
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (75571, DATE '2024-01-01', 79.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (75572, DATE '2024-01-01', 79.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (75573, DATE '2024-01-01', 99.99, NULL);
+
+INSERT INTO HISTORICO_PRECIO (ID_JUGUETE, FECHA_INICIO, PRECIO, FECHA_FIN)
+VALUES (75574, DATE '2024-01-01', 149.99, NULL);
+
+------------------------------------------------------------
+-- LOTES_INVENTARIO
+------------------------------------------------------------
+
+-- Tienda 100 - LEGO Store Sandton City (Sudáfrica)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 100, 11203, 100);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 100, 60466, 80);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 100, 31109, 60);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 100, 75571, 40);
+
+-- Tienda 110 - LEGO Certified Store BGC (Filipinas)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 110, 11201, 90);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 110, 60456, 70);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 110, 31154, 50);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 110, 75572, 30);
+
+-- Tienda 120 - LEGO Store Dublin - Grafton St. (Irlanda)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 120, 11202, 80);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 120, 60465, 60);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 120, 31142, 40);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 120, 75573, 20);
+
+-- Tienda 130 - LEGO Store El Trébol (Chile)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 130, 10458, 120);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 130, 60367, 90);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 130, 31173, 70);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 130, 75574, 50);
+
+-- Tienda 131 - LEGO Store Vespucio (Chile)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 131, 11203, 50);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 131, 60456, 45);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 131, 31154, 35);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 131, 75574, 25);
+
+-- Tienda 140 - LEGO Store Ciputra World Surabaya (Indonesia)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 140, 11201, 60);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 140, 60466, 55);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 140, 31109, 45);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 140, 75571, 35);
+
+-- Tienda 141 - LEGO Store LCS Aeon BSD Mall (Indonesia)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 141, 11202, 65);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 141, 60465, 55);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 141, 31142, 45);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 141, 75573, 35);
+
+-- Tienda 150 - LEGO Store Suwon (Corea del Sur)
+INSERT INTO LOTES_INVENTARIO VALUES (1, 150, 10458, 70);
+INSERT INTO LOTES_INVENTARIO VALUES (2, 150, 60367, 60);
+INSERT INTO LOTES_INVENTARIO VALUES (3, 150, 31173, 50);
+INSERT INTO LOTES_INVENTARIO VALUES (4, 150, 75572, 40);

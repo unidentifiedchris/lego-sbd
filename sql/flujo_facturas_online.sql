@@ -12,6 +12,8 @@
 SELECT * FROM V_CLIENTES_LEGO;
 /
 
+SELECT * FROM V_PRODUCTOS_POR_TIENDA;
+/
 
 SET SERVEROUTPUT ON;
 
@@ -19,7 +21,7 @@ DECLARE
     -- =================================================================
     -- PARÁMETROS DE LA PRUEBA (MODIFICAR ESTOS VALORES)
     -- =================================================================
-    p_id_cliente    CLIENTES_LEGO.ID_CLIENTE%TYPE := 1; -- << ID del cliente que realiza la compra
+    p_id_cliente    CLIENTES_LEGO.ID_CLIENTE%TYPE := 2; -- << ID del cliente que realiza la compra
     p_items         T_VENTA_ITEM_TAB;                   -- << Colección de artículos en el carrito
 
 BEGIN
@@ -46,8 +48,7 @@ BEGIN
     -- Define aquí los artículos del carrito de compras.
     -- Cada objeto representa un tipo de juguete y la cantidad deseada.
     p_items := T_VENTA_ITEM_TAB(
-        T_VENTA_ITEM_OBJ(9019, 2), -- << Comprando 2 unidades del juguete con ID 9019
-        T_VENTA_ITEM_OBJ(9018, 5)  -- << Comprando 5 unidades del juguete con ID 9018
+        T_VENTA_ITEM_OBJ(11203, 2) -- << Comprando 2 unidades del juguete con ID 9019
     );
 
     DBMS_OUTPUT.PUT_LINE(' -> Comprando ' || p_items.COUNT || ' tipo(s) de juguete(s) para el cliente ' || p_id_cliente || '.');
